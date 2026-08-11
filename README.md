@@ -251,6 +251,143 @@ appium:
 > [Run Preinstalled WDA](https://appium.github.io/appium-xcuitest-driver/latest/guides/run-preinstalled-wda/)
 > を参照。
 
+## 実機での確認手順(最初に一度だけ)
+
+**この方式が実機で成立するかは、まだ確認されていない。** Phase 0 の検証は
+エミュレータとシミュレータで行っており、実機は未検証(下の「未検証の範囲」を参照)。
+
+いきなり全画面に `Semantics` を付けて回ると、方式が成立しなかったときの手戻りが
+大きい。**1 画面・数要素で下の順に確かめてから展開する。** 各段階で止まれば、
+そこまでの作業しか無駄にならない。
+
+### 0. 設定を埋める
+
+```yaml
+appium:
+  android:
+    udid: "<adb devices -l のシリアル>"
+  ios:
+    udid: "<xcrun devicectl list devices の UDID>"
+    platform_version: "<端末の iOS バージョン>"
+    xcode_org_id: "<Apple Developer の Team ID>"
+```
+
+### 1. 端末が見えているか
+
+```bash
+uv run e2e doctor
+```
+
+**通過条件**: 「Android 実機の接続」「iOS 実機の接続」が ✓ になる。
+
+落ちる場合は USB 接続、Android の USB デバッグ許可、iOS の「このコンピュータを
+信頼」とデベロッパモードを確認する。
+
+### 2. アプリに identifier を 3〜5 個だけ付ける
+
+テスト対象にする画面を 1 つ選び、代表的な要素にだけ付ける。
+**この段階では画面すべてに付けない。**
+
+```dart
+Semantics(
+  container: true,
+  identifier: 'login_submit_button',
+  child: ElevatedButton(...),
+)
+```
+
+付けたらレジストリにも登録し、走査で拾えることを確認する。
+
+```bash
+uv run e2e scan-app
+```
+
+**通過条件**: 付けた identifier が一覧に出て、`!!`(container 漏れ)が付かない。
+
+### 3. 端末で実際に操作できる状態にする
+
+```bash
+cd <アプリのルート>
+
+# Android
+flutter build apk --debug --target-platform android-arm64 --split-per-abi
+adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+
+# iOS(実機は release。debug は Appium から起動できない)
+flutter build ios --release
+
+# 別ターミナルで
+npx appium --port 4723
+```
+
+### 4. セッションが張れて、画面が取れるか
+
+端末で対象の画面を開いた状態にして実行する。
+
+```bash
+uv run e2e inspect --platform android
+uv run e2e inspect --platform ios
+```
+
+**通過条件**: スクリーンショットとアクセシビリティツリーが保存される。
+
+**iOS 実機で最初に詰まるのはここ。** WebDriverAgent の署名が通らないと
+`xcodebuild` が exit code 65 で落ちてセッションが張れない。
+`appium.ios.xcode_org_id` を確認する。
+
+### 5. identifier が実機で露出しているか ← **方式の生死はここ**
+
+手順 4 の出力に、付けた identifier が並ぶかを見る。
+
+```
+画面に出ている identifier (resource-id):
+  ✓ login_email_field
+  ✓ login_submit_button
+  ✓ login_title
+```
+
+**通過条件**: 付けた identifier がすべて `✓` で出る。
+
+`scan-app` には出るのに `inspect` に出ない場合、**ソースには書かれているが実機の
+アクセシビリティツリーには現れていない**ということ。この方式の前提が崩れるので、
+先に進まずに原因を切り分ける。
+
+- Android で出ない → `container: true` の書き漏れ、またはビルドの入れ替え忘れ
+- iOS で出ない → Flutter の実機セマンティクスの制約に当たっている可能性がある
+  ([関連する報告](https://github.com/flutter/flutter/issues/151238))。
+  ここで止まる場合は `appium-flutter-integration-driver` への切り替えを検討する
+
+### 6. 操作できるか
+
+`tests/e2e/test_smoke.py` を手で書いて 1 本流す。
+
+```python
+import pytest
+from tests.pages import LoginPage
+
+
+@pytest.mark.e2e
+def test_tc_smoke_001(driver, platform):
+    """TC_SMOKE_001: 対象画面が表示され、ボタンをタップできる"""
+    login = LoginPage(driver, platform)
+    assert login.is_title_displayed()
+    login.tap_submit_button()
+```
+
+```bash
+uv run e2e gen-pages
+uv run pytest tests/e2e/test_smoke.py --platform android -v
+```
+
+**通過条件**: green になり、`artifacts/local/evidence/TC_SMOKE_001/` に
+スクリーンショットが残る。
+
+### 7. ここまで通ったらワークフローへ
+
+方式が実機で成立することを確認できたので、対象画面の残りの要素に
+`Semantics` を付け、設計書を取り込んでワークフローを回す。
+手順 6 のスモークテストは役目を終えたので消してよい。
+
 ## 実行前の準備(毎回)
 
 Appium サーバの起動とアプリの投入はハーネスの外にあるので、先に済ませておく。
@@ -334,7 +471,8 @@ uv run e2e resume
 ```bash
 uv run e2e stages           # 工程の一覧
 uv run e2e ingest <ファイル>  # Excel / Confluence の設計書を取り込む
-uv run e2e scan-app         # アプリの Semantics(identifier:) を走査
+uv run e2e scan-app         # アプリのソースの Semantics(identifier:) を走査
+uv run e2e inspect          # 実機の画面を取得し identifier の露出を確認
 uv run e2e gen-pages        # レジストリから Page Object を再生成
 uv run e2e gate <工程>       # 特定工程の検証ゲートだけ実行
 uv run e2e resume --run <ID> # 過去の実行を再開
@@ -364,6 +502,10 @@ Semantics(
 
 `e2e scan-app` がこの書き漏れを検出し、`locators` 工程の検証ゲートが
 ブロックするため、見落としたまま先に進むことはない。
+
+ただし `scan-app` が見るのは**ソースコードだけ**で、実機のアクセシビリティツリーに
+実際に現れるかまでは分からない。両者が食い違うのがこの方式で最も厄介な失敗の形なので、
+実機では `e2e inspect` で突き合わせる。
 
 ## 動作確認の記録
 

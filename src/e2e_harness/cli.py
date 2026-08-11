@@ -234,6 +234,59 @@ def cmd_scan_app(config: Config, args: argparse.Namespace) -> int:
     return 1 if delta.has_blocking_problem else 0
 
 
+def cmd_inspect(config: Config, args: argparse.Namespace) -> int:
+    """実機に今出ている画面を取得し、identifier の露出を確認する。"""
+    from . import inspect as inspect_mod
+
+    registry = load_registry(config.locators_path)
+    output_dir = config.artifacts_dir / "inspect"
+
+    print(f"{args.platform} の端末に接続しています...")
+    try:
+        result = inspect_mod.inspect_screen(
+            config, registry, args.platform, output_dir
+        )
+    except Exception as exc:  # noqa: BLE001 - 原因は多岐にわたるのでそのまま見せる
+        print(f"\n接続に失敗しました: {type(exc).__name__}", file=sys.stderr)
+        print(f"{exc}", file=sys.stderr)
+        if args.platform == "ios":
+            print(
+                "\niOS 実機では WebDriverAgent の署名が必要です。"
+                "xcodebuild が exit code 65 で落ちている場合は"
+                " appium.ios.xcode_org_id を確認してください。",
+                file=sys.stderr,
+            )
+        return 1
+
+    print(f"  画面           : {result.screenshot}")
+    print(f"  ツリー         : {result.source_path}")
+    print()
+
+    attribute = "resource-id" if args.platform == "android" else "name"
+    print(f"画面に出ている identifier ({attribute}):")
+    if result.found:
+        for identifier in result.found:
+            print(f"  ✓ {identifier}")
+    else:
+        print("  (レジストリに載っている identifier は 1 つも出ていません)")
+
+    if result.missing:
+        print("\nレジストリにあるが、この画面には出ていない:")
+        for identifier in result.missing:
+            print(f"  - {identifier}")
+        print(
+            "  ※ 別画面の要素なら正常。今の画面にあるはずのものが出ていない場合は、"
+            "\n    Semantics(container: true, identifier: ...) の書き方を確認する。"
+        )
+
+    if args.all and result.unregistered:
+        print("\nレジストリに無い識別子(アプリ以外の要素も含む):")
+        for identifier in result.unregistered[:40]:
+            print(f"  ? {identifier}")
+
+    return 0 if result.found or not registry.screens else 1
+
+
 def cmd_gen_pages(config: Config, args: argparse.Namespace) -> int:
     del args
     registry = load_registry(config.locators_path)
@@ -621,6 +674,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     scan_p = sub.add_parser("scan-app", help="アプリの Semantics(identifier:) を走査する")
     scan_p.set_defaults(func=cmd_scan_app)
+
+    inspect_p = sub.add_parser(
+        "inspect", help="実機の画面を取得し identifier の露出を確認する"
+    )
+    inspect_p.add_argument("--platform", choices=PLATFORMS, default="android")
+    inspect_p.add_argument(
+        "--all", action="store_true", help="レジストリに無い識別子も表示する"
+    )
+    inspect_p.set_defaults(func=cmd_inspect)
 
     gen_p = sub.add_parser("gen-pages", help="レジストリから Page Object を生成する")
     gen_p.set_defaults(func=cmd_gen_pages)

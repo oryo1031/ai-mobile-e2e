@@ -17,12 +17,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 from appium import webdriver
-from appium.options.android import UiAutomator2Options
-from appium.options.ios import XCUITestOptions
 
-CONFIG_FILENAME = "e2e.config.yaml"
+from e2e_harness.config import Config, load_config
+from e2e_harness.session import build_options
+
 _TESTCASE_ID_RE = re.compile(r"^test_(tc_[a-z0-9_]+)$")
 
 
@@ -58,20 +57,12 @@ def pytest_configure(config: pytest.Config) -> None:
 # ----------------------------------------------------------------------
 # 設定
 # ----------------------------------------------------------------------
-def _find_config(start: Path) -> Path:
-    for candidate in [start, *start.parents]:
-        path = candidate / CONFIG_FILENAME
-        if path.is_file():
-            return path
-    raise FileNotFoundError(f"{CONFIG_FILENAME} が見つかりません")
-
-
 @pytest.fixture(scope="session")
-def harness_config() -> dict[str, Any]:
-    path = _find_config(Path(__file__).resolve().parent)
-    data: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
-    data["_root"] = path.parent
-    return data
+def harness_config() -> Config:
+    """ハーネス設定。capability の組み立ても含めてパッケージ側と共有する。"""
+    from e2e_harness.config import find_config_file
+
+    return load_config(find_config_file(Path(__file__).resolve().parent))
 
 
 @pytest.fixture(scope="session")
@@ -80,12 +71,13 @@ def platform(request: pytest.FixtureRequest) -> str:
 
 
 @pytest.fixture(scope="session")
-def evidence_root(request: pytest.FixtureRequest, harness_config: dict[str, Any]) -> Path:
+def evidence_root(request: pytest.FixtureRequest, harness_config: Config) -> Path:
     option = request.config.getoption("--evidence-dir")
-    if option:
-        path = Path(str(option))
-    else:
-        path = Path(harness_config["_root"]) / "artifacts" / "local" / "evidence"
+    path = (
+        Path(str(option))
+        if option
+        else harness_config.artifacts_dir / "local" / "evidence"
+    )
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -93,67 +85,10 @@ def evidence_root(request: pytest.FixtureRequest, harness_config: dict[str, Any]
 # ----------------------------------------------------------------------
 # ドライバ
 # ----------------------------------------------------------------------
-def _build_options(
-    platform_name: str, config: dict[str, Any]
-) -> UiAutomator2Options | XCUITestOptions:
-    """実機向けのセッション設定を組み立てる。
-
-    実機では端末の選択に udid を使う。deviceName は選択に使われないため、
-    複数台つないでいるときに意図しない端末へ流れないよう udid を必ず入れる。
-    """
-    root = Path(config["_root"])
-    app_root = (root / config["app"]["root"]).resolve()
-
-    if platform_name == "android":
-        options = UiAutomator2Options()
-        appium_cfg = config["appium"]["android"]
-        options.platform_name = appium_cfg["platform_name"]
-        options.automation_name = appium_cfg["automation_name"]
-        options.device_name = appium_cfg.get("device_name", "Android")
-        if appium_cfg.get("udid"):
-            options.udid = str(appium_cfg["udid"])
-        # アプリは事前に投入しておき、ここでは起動するだけにする。
-        # 同一バージョンだと再インストールがスキップされ、古いビルドを
-        # 検証してしまう事故を避けるため。
-        options.app_package = config["app"]["android_package"]
-        options.app_activity = config["app"]["android_activity"]
-        options.new_command_timeout = 300
-        return options
-
-    options_ios = XCUITestOptions()
-    appium_cfg = config["appium"]["ios"]
-    options_ios.platform_name = appium_cfg["platform_name"]
-    options_ios.automation_name = appium_cfg["automation_name"]
-    options_ios.device_name = appium_cfg.get("device_name", "iPhone")
-    if appium_cfg.get("udid"):
-        options_ios.udid = str(appium_cfg["udid"])
-    if appium_cfg.get("platform_version"):
-        options_ios.platform_version = str(appium_cfg["platform_version"])
-
-    # 実機では WebDriverAgent を端末にインストールするため署名が要る。
-    # 設定が誤っていると xcodebuild が exit code 65 で落ちる。
-    if appium_cfg.get("xcode_org_id"):
-        options_ios.xcode_org_id = str(appium_cfg["xcode_org_id"])
-        options_ios.xcode_signing_id = str(
-            appium_cfg.get("xcode_signing_id", "iPhone Developer")
-        )
-    if appium_cfg.get("updated_wda_bundle_id"):
-        options_ios.updated_wda_bundle_id = str(appium_cfg["updated_wda_bundle_id"])
-
-    options_ios.bundle_id = config["app"]["ios_bundle_id"]
-    # 実機用ビルドがあれば Appium に投入させる。無ければ導入済みの前提で起動する。
-    ios_app = app_root / config["build"]["ios_app"]
-    if ios_app.exists():
-        options_ios.app = str(ios_app)
-
-    options_ios.new_command_timeout = 300
-    return options_ios
-
-
 @pytest.fixture
 def driver(
     request: pytest.FixtureRequest,
-    harness_config: dict[str, Any],
+    harness_config: Config,
     platform: str,
     evidence_root: Path,
 ) -> Any:
@@ -161,8 +96,8 @@ def driver(
 
     テスト間の状態汚染を避けるため、セッションはテスト単位で使い捨てる。
     """
-    options = _build_options(platform, harness_config)
-    server_url = harness_config["appium"]["server_url"]
+    options = build_options(harness_config, platform)
+    server_url = str(harness_config.appium.get("server_url", "http://127.0.0.1:4723"))
     session = webdriver.Remote(server_url, options=options)
     session.implicitly_wait(5)
 
