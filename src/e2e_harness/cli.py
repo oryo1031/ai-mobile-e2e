@@ -72,6 +72,25 @@ def _connected_android_devices() -> list[str]:
     return devices
 
 
+def _ios_devices_output() -> str:
+    """接続されている iOS 実機の一覧(生の出力)。"""
+    if shutil.which("xcrun") is None:
+        return ""
+    for argv in (
+        ["xcrun", "devicectl", "list", "devices"],
+        ["xcrun", "xctrace", "list", "devices"],
+    ):
+        try:
+            proc = subprocess.run(  # noqa: S603
+                argv, capture_output=True, text=True, timeout=30, check=False
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if proc.returncode == 0 and proc.stdout.strip():
+            return proc.stdout
+    return ""
+
+
 def _is_app_installed(package: str) -> bool:
     if not package or shutil.which("adb") is None:
         return False
@@ -455,12 +474,14 @@ def cmd_doctor(config: Config, args: argparse.Namespace) -> int:
     check(
         f"Android ビルド成果物: {config.android_apk_path.name}",
         config.android_apk_path.is_file(),
-        "flutter build apk --debug を実行してください。",
+        "flutter build apk --debug --target-platform android-arm64"
+        " --split-per-abi を実行してください。",
     )
     check(
         f"iOS ビルド成果物: {config.ios_app_path.name}",
         config.ios_app_path.is_dir(),
-        "flutter build ios --simulator --debug を実行してください。",
+        "flutter build ios --release を実行してください。"
+        " 実機では debug ビルドは Appium から起動できません。",
     )
     check(
         "Appium CLI",
@@ -473,27 +494,63 @@ def cmd_doctor(config: Config, args: argparse.Namespace) -> int:
         shutil.which("adb") is not None,
         "Android SDK の platform-tools を PATH に追加してください。",
     )
-    # 手元で実行する運用では、エミュレータの起動忘れが最も多い詰まりどころ。
+    # --- Android 実機 ---
+    android_cfg = config.appium.get("android", {})
     devices = _connected_android_devices()
-    target_device = str(config.appium.get("android", {}).get("device_name", ""))
+    android_udid = str(android_cfg.get("udid", ""))
     check(
-        f"Android 端末の接続 ({target_device or '未設定'})",
-        bool(devices) and (not target_device or target_device in devices),
+        f"Android 実機の接続 ({android_udid or 'udid 未設定'})",
+        bool(devices) and (not android_udid or android_udid in devices),
         (
-            "エミュレータを起動してください: emulator -avd <AVD名>"
+            "USB で接続し、端末側で USB デバッグを有効にしてください。"
+            " 初回は端末に出る認証ダイアログを許可する必要があります。"
             if not devices
-            else f"接続中の端末: {', '.join(devices)}。"
-            " e2e.config.yaml の appium.android.device_name と一致しません。"
+            else f"接続中: {', '.join(devices)}。"
+            " e2e.config.yaml の appium.android.udid と一致しません。"
         ),
     )
+    if devices and not android_udid:
+        print(
+            f"      複数台つなぐ場合は udid を設定してください: {', '.join(devices)}"
+        )
     # ビルドが入れ替わっていない事故を避けるため、投入済みかも見る。
     if devices:
-        installed = _is_app_installed(config.app.android_package)
         check(
             f"アプリの投入 ({config.app.android_package})",
-            installed,
+            _is_app_installed(config.app.android_package),
             "adb install -r <APK> でアプリを投入してください。"
             " 既に入っている場合も、修正後は必ず入れ直すこと。",
+        )
+
+    # --- iOS 実機 ---
+    ios_cfg = config.appium.get("ios", {})
+    ios_udid = str(ios_cfg.get("udid", ""))
+    ios_output = _ios_devices_output()
+    check(
+        f"iOS 実機の接続 ({ios_udid or 'udid 未設定'})",
+        bool(ios_udid) and ios_udid in ios_output,
+        (
+            "`xcrun devicectl list devices` で UDID を確認し、"
+            " e2e.config.yaml の appium.ios.udid に設定してください。"
+            if not ios_udid
+            else "端末が見つかりません。USB 接続、ペアリング(このコンピュータを信頼)、"
+            "端末側の「デベロッパモード」が有効か確認してください。"
+        ),
+    )
+    check(
+        "iOS の署名設定 (xcode_org_id)",
+        bool(ios_cfg.get("xcode_org_id")),
+        "実機では WebDriverAgent の署名が必須です。Apple Developer の"
+        " Team ID を appium.ios.xcode_org_id に設定してください。"
+        " 未設定だと xcodebuild が exit code 65 で落ちます。",
+    )
+    # シミュレータ用ビルドは実機で動かない。パスの取り違えが起きやすい。
+    if "iphonesimulator" in str(config.build.ios_app):
+        problems += 1
+        print("  ✗ iOS ビルド成果物がシミュレータ用のパスを指しています")
+        print(
+            "      build.ios_app を build/ios/iphoneos/Runner.app に変更し、"
+            "`flutter build ios --release` で実機用にビルドしてください。"
         )
     # バイナリの有無だけでなく、サーバが応答するかまで見る。
     # execute 工程はサーバが起動している前提で動くため。

@@ -107,20 +107,39 @@ app:
 
 build:
   # ビルド成果物のパス(app.root からの相対)。
+  # iOS は実機用の release ビルド(iphoneos)であること。
+  # iOS 14 以降、debug ビルドは Appium から起動できない(JIT 制約のため)。
   android_apk: "{android_apk}"
   ios_app: "{ios_app}"
 
 appium:
   server_url: "{server_url}"
+
   android:
-    device_name: "{android_device}"
     platform_name: "Android"
     automation_name: "UiAutomator2"
+    # 実機のシリアル番号。`adb devices -l` で確認する。
+    # 端末の選択に実際に使われるのはこちらで、device_name は表示用。
+    udid: "{android_udid}"
+    device_name: "{android_device}"
+
   ios:
-    device_name: "{ios_device}"
-    platform_version: "{ios_version}"
     platform_name: "iOS"
     automation_name: "XCUITest"
+    # 実機の UDID。`xcrun devicectl list devices` で確認する。
+    udid: "{ios_udid}"
+    device_name: "{ios_device}"
+    # 端末の iOS バージョンと一致させる。
+    platform_version: "{ios_version}"
+
+    # --- 実機で必須の署名設定 ---
+    # WebDriverAgent を端末にインストールするために署名が要る。
+    # xcode_org_id は Apple Developer の Team ID(10 桁)。
+    # 設定が誤っていると xcodebuild が exit code 65 で落ちる。
+    xcode_org_id: "{xcode_org_id}"
+    xcode_signing_id: "iPhone Developer"
+    # 無料の Apple ID を使う場合や、Bundle ID を固定したい場合に指定する。
+    updated_wda_bundle_id: "{updated_wda_bundle_id}"
 
 copilot:
   # Copilot CLI の実行ファイル。
@@ -148,17 +167,23 @@ def render_config(**values: str) -> str:
     テンプレートから作り直す方式にしている。
     """
     defaults = {
-        "app_root": "../..",
+        "app_root": "..",
         "lib_dir": "lib",
         "android_package": "com.example.app",
         "android_activity": ".MainActivity",
         "ios_bundle_id": "com.example.app",
-        "android_apk": "build/app/outputs/flutter-apk/app-debug.apk",
-        "ios_app": "build/ios/iphonesimulator/Runner.app",
+        # 実機は arm64。split-per-abi でビルドすると容量も小さくなる。
+        "android_apk": "build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk",
+        # 実機用ビルド。iphonesimulator のものは実機で動かない。
+        "ios_app": "build/ios/iphoneos/Runner.app",
         "server_url": "http://127.0.0.1:4723",
-        "android_device": "emulator-5554",
-        "ios_device": "iPhone 16 Pro",
-        "ios_version": "18.5",
+        "android_udid": "",
+        "android_device": "Android 実機",
+        "ios_udid": "",
+        "ios_device": "iPhone 実機",
+        "ios_version": "",
+        "xcode_org_id": "",
+        "updated_wda_bundle_id": "",
     }
     defaults.update({k: v for k, v in values.items() if v})
     return CONFIG_TEMPLATE.format(**defaults)

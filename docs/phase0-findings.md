@@ -11,6 +11,15 @@ Phase 1 以降へ進んでよい。`appium-flutter-integration-driver` への切
 必須で、これを守らないと静かに identifier が消える。下の「付与ガイドライン」が
 本フェーズの最重要成果物。
 
+> **注意: この検証はエミュレータとシミュレータで行っている。**
+> 実運用は Android 実機・iOS 実機で行うため、本書の結論のうち
+> 「identifier がネイティブ側に露出する」という前提は実機で再確認すること。
+> 特に iOS 実機は、WebDriverAgent の署名が新たに必要になるうえ、Flutter に
+> [実機でセマンティクスの一部が期待どおり出ない報告](https://github.com/flutter/flutter/issues/151238)
+> がある(報告は `semanticsLabel` に関するもので、本方式が使う `identifier` とは
+> 別経路だが、同じ領域のため)。
+> 付与ガイドラインとロケータ戦略の結論自体は、実機でも変わらない見込み。
+
 ## 検証環境
 
 | 項目 | 値 |

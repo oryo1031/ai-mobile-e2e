@@ -136,16 +136,13 @@ uv run e2e sync-agents --output ../.github/agents
 uv run e2e doctor
 ```
 
-アプリのソース、ビルド成果物、Appium CLI、adb、**Android 端末が接続されているか**、
-**アプリが投入済みか**、**Appium サーバが応答するか**、Copilot CLI、レジストリ、
-エージェント定義をまとめて確認する。詰まったらまずこれを叩く。
+アプリのソース、ビルド成果物、Appium CLI、adb、**Android 実機の接続**、
+**アプリが投入済みか**、**iOS 実機の接続**、**iOS の署名設定**、
+**Appium サーバが応答するか**、Copilot CLI、レジストリ、エージェント定義を
+まとめて確認する。詰まったらまずこれを叩く。
 
-Appium サーバとエミュレータ/シミュレータの起動はハーネスの外にある。
-別のターミナルで先に立ち上げておくこと。
-
-```bash
-npx appium --port 4723        # 別ターミナルで起動しておく
-```
+実機の接続確認では、設定した `udid` が実際に見えている端末と一致するかまで見る。
+一致しない場合は接続中の端末一覧を表示するので、そのまま設定に写せる。
 
 ## 設計書の取り込み
 
@@ -196,34 +193,107 @@ Confluence の HTML エクスポートを使うこと。
 「元の設計書に何を追記してほしいか」という形で差し戻し、ワークフローは止まる。
 体裁を整える作業に人手をかける必要はない。
 
-## 実行前の準備(毎回)
+## 実機の準備(初回のみ)
 
-テストは手元で実行する。エミュレータと Appium サーバの起動、アプリの投入は
-ハーネスの外にあるので、先に済ませておく。
+テストは**実機**で実行する。端末ごとに一度だけ次の準備が要る。
+
+### Android 実機
+
+1. 端末の「開発者向けオプション」→「USB デバッグ」を有効にする
+2. USB で接続し、端末に出る「USB デバッグを許可しますか」を許可する
+3. シリアル番号を確認して設定に書く
 
 ```bash
-# 1. エミュレータを起動する(別ターミナル)
-emulator -avd <AVD名>
+adb devices -l
+```
 
-# 2. Appium サーバを起動する(別ターミナル)
+```yaml
+appium:
+  android:
+    udid: "<adb devices で表示されたシリアル>"
+```
+
+**`udid` は必ず設定する。** `device_name` は端末の選択には使われないため、
+複数台つないでいると意図しない端末でテストが走る。
+
+### iOS 実機
+
+こちらは手間がかかる。**Appium は WebDriverAgent というアプリを端末に
+インストールして操作するため、実機では Apple の署名が必要になる。**
+
+1. 端末を USB 接続し、「このコンピュータを信頼」を許可する
+2. 端末の「設定 > プライバシーとセキュリティ > デベロッパモード」を有効にする
+   (iOS 16 以降。有効化には端末の再起動が要る)
+3. UDID と Apple Developer の Team ID を設定に書く
+
+```bash
+xcrun devicectl list devices        # UDID を確認
+```
+
+```yaml
+appium:
+  ios:
+    udid: "<端末の UDID>"
+    platform_version: "<端末の iOS バージョン>"
+    xcode_org_id: "<Apple Developer の Team ID (10 桁)>"
+    xcode_signing_id: "iPhone Developer"
+```
+
+**`xcode_org_id` が未設定・誤りだと `xcodebuild` が exit code 65 で落ちる。**
+これが iOS 実機で最初に当たる壁で、エラーメッセージからは署名の問題だと
+分かりにくい。`e2e doctor` が未設定を検出する。
+
+無料の Apple ID を使う場合は Bundle ID の重複を避けるため
+`updated_wda_bundle_id` の指定も要る。
+
+> WebDriverAgent の署名を毎回やり直したくない場合は、事前にビルドして端末へ
+> インストールしておく運用もできる。Appium の
+> [Run Preinstalled WDA](https://appium.github.io/appium-xcuitest-driver/latest/guides/run-preinstalled-wda/)
+> を参照。
+
+## 実行前の準備(毎回)
+
+Appium サーバの起動とアプリの投入はハーネスの外にあるので、先に済ませておく。
+
+```bash
+# 1. Appium サーバを起動する(別ターミナル)
 npx appium --port 4723
 
-# 3. アプリをビルドして投入する
+# 2. アプリをビルドして端末に入れる
 cd <アプリのルート>
+
+# Android(debug で問題ない)
 flutter build apk --debug --target-platform android-arm64 --split-per-abi
 adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
 
-# 4. 準備できているか確認する
+# iOS(実機は release。debug は Appium から起動できない)
+flutter build ios --release
+
+# 3. 準備できているか確認する
 cd e2e && uv run e2e doctor
 ```
 
-**手順 3 を飛ばさないこと。** Appium は署名とバージョンが同じ APK の再インストールを
+**手順 2 を飛ばさないこと。** Appium は署名とバージョンが同じ APK の再インストールを
 スキップするため、アプリを直しても古いビルドがテストされ続ける。
 「直したはずの不具合でテストが落ち続ける」「付けたはずの identifier が
 実行時に見つからない」という症状が出たら、まずここを疑う。
 
-`e2e doctor` はエミュレータの接続、Appium サーバの応答、ビルド成果物の有無を
-まとめて確認するので、実行前に一度通しておくと原因切り分けが速い。
+iOS は `build.ios_app` に実機用ビルドがあれば Appium が投入する。
+無ければ導入済みの前提で `bundleId` から起動する。
+
+### iOS 実機で debug ビルドは使えない
+
+**iOS 14 以降、Flutter の debug ビルドは Flutter のツールか Xcode からしか
+起動できない。** ホーム画面からも Appium からも起動できないため、実機のテストでは
+`--release`(または `--profile`)でビルドする必要がある。debug は JIT で動くため、
+iOS 側の制約がかかる。
+
+release で問題ないのは、本ハーネスが **Appium のネイティブドライバ
+(XCUITest)を使っているから**。Flutter Driver 系は release に対応しないが、
+こちらはアプリに手を入れずアクセシビリティ経由で操作するため、
+リリース相当のビルドをそのまま検証できる。ドライバ選定時に狙った利点がここで効く。
+
+release ビルドにはアプリ本体の署名も要る。Xcode で開発用の Team を設定しておくこと。
 
 ## 使い方
 
@@ -305,14 +375,25 @@ Semantics(
   行番号付きで検出する
 - **走査ゲート** — `container: true` の書き漏れを 9 件中 1 件だけ正確に摘出する
 - **スキーマゲート** — `open_questions` の残存と不正な列挙値を位置情報付きで検出する
-- **実行と証跡** — Android エミュレータで試験項目 7 件が通過。失敗時には
+- **実行と証跡** — 試験項目 7 件が通過。失敗時には
   `failure.png` / `page_source.xml` / `logcat.txt` / `recording.mp4` が
   試験項目 ID ごとのディレクトリに揃う
 - **停止と再開** — 人のレビュー地点(工程 3・8)で停止し、`e2e approve` で再開する
 
-なお **iOS はこのハーネス経由での実行が未検証**。identifier の露出と操作自体は
-`docs/phase0-findings.md` のとおり iPhone シミュレータで確認済みで、Page Object にも
-プラットフォーム差を吸収する実装が入っているが、通しで動かしてはいない。
+### 未検証の範囲
+
+**この確認はすべて Android エミュレータと iPhone シミュレータで行っている。
+実機での実行は未検証。** 運用は実機で行うため、最初の適用時は次を確かめること。
+
+- **Android 実機** — 差分は小さい。`udid` での端末選択と、端末側の USB デバッグ許可
+- **iOS 実機** — 差分が大きい。WebDriverAgent の署名が新たに必要になり、
+  ここが通らないとセッションが張れない。さらに Flutter には
+  [実機でセマンティクスの一部が期待どおり出ない報告](https://github.com/flutter/flutter/issues/151238)
+  がある。この報告は `semanticsLabel` に関するもので、本ハーネスが依存する
+  `identifier` とは別の経路だが、**同じ領域なので実機で最初に確認すべき点**
+
+iOS 実機は 1 画面・1 要素で `e2e scan-app` と単純なタップまで通してから、
+本格的に展開することを勧める。
 
 ## リポジトリ構成
 

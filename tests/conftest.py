@@ -96,6 +96,11 @@ def evidence_root(request: pytest.FixtureRequest, harness_config: dict[str, Any]
 def _build_options(
     platform_name: str, config: dict[str, Any]
 ) -> UiAutomator2Options | XCUITestOptions:
+    """実機向けのセッション設定を組み立てる。
+
+    実機では端末の選択に udid を使う。deviceName は選択に使われないため、
+    複数台つないでいるときに意図しない端末へ流れないよう udid を必ず入れる。
+    """
     root = Path(config["_root"])
     app_root = (root / config["app"]["root"]).resolve()
 
@@ -103,8 +108,10 @@ def _build_options(
         options = UiAutomator2Options()
         appium_cfg = config["appium"]["android"]
         options.platform_name = appium_cfg["platform_name"]
-        options.device_name = appium_cfg["device_name"]
         options.automation_name = appium_cfg["automation_name"]
+        options.device_name = appium_cfg.get("device_name", "Android")
+        if appium_cfg.get("udid"):
+            options.udid = str(appium_cfg["udid"])
         # アプリは事前に投入しておき、ここでは起動するだけにする。
         # 同一バージョンだと再インストールがスキップされ、古いビルドを
         # 検証してしまう事故を避けるため。
@@ -116,10 +123,29 @@ def _build_options(
     options_ios = XCUITestOptions()
     appium_cfg = config["appium"]["ios"]
     options_ios.platform_name = appium_cfg["platform_name"]
-    options_ios.device_name = appium_cfg["device_name"]
-    options_ios.platform_version = str(appium_cfg["platform_version"])
     options_ios.automation_name = appium_cfg["automation_name"]
-    options_ios.app = str(app_root / config["build"]["ios_app"])
+    options_ios.device_name = appium_cfg.get("device_name", "iPhone")
+    if appium_cfg.get("udid"):
+        options_ios.udid = str(appium_cfg["udid"])
+    if appium_cfg.get("platform_version"):
+        options_ios.platform_version = str(appium_cfg["platform_version"])
+
+    # 実機では WebDriverAgent を端末にインストールするため署名が要る。
+    # 設定が誤っていると xcodebuild が exit code 65 で落ちる。
+    if appium_cfg.get("xcode_org_id"):
+        options_ios.xcode_org_id = str(appium_cfg["xcode_org_id"])
+        options_ios.xcode_signing_id = str(
+            appium_cfg.get("xcode_signing_id", "iPhone Developer")
+        )
+    if appium_cfg.get("updated_wda_bundle_id"):
+        options_ios.updated_wda_bundle_id = str(appium_cfg["updated_wda_bundle_id"])
+
+    options_ios.bundle_id = config["app"]["ios_bundle_id"]
+    # 実機用ビルドがあれば Appium に投入させる。無ければ導入済みの前提で起動する。
+    ios_app = app_root / config["build"]["ios_app"]
+    if ios_app.exists():
+        options_ios.app = str(ios_app)
+
     options_ios.new_command_timeout = 300
     return options_ios
 

@@ -7,7 +7,7 @@
 app:
   # アプリリポジトリのルート。このファイルからの相対パス、または絶対パス。
   # 例: アプリの配下に tools/ai-mobile-e2e として置いたなら "../.."
-  root: "../.."
+  root: ".."
 
   # Flutter のソースディレクトリ(app.root からの相対)。
   # Semantics(identifier:) の静的走査対象。
@@ -20,20 +20,39 @@ app:
 
 build:
   # ビルド成果物のパス(app.root からの相対)。
-  android_apk: "build/app/outputs/flutter-apk/app-debug.apk"
-  ios_app: "build/ios/iphonesimulator/Runner.app"
+  # iOS は実機用の release ビルド(iphoneos)であること。
+  # iOS 14 以降、debug ビルドは Appium から起動できない(JIT 制約のため)。
+  android_apk: "build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk"
+  ios_app: "build/ios/iphoneos/Runner.app"
 
 appium:
   server_url: "http://127.0.0.1:4723"
+
   android:
-    device_name: "emulator-5554"
     platform_name: "Android"
     automation_name: "UiAutomator2"
+    # 実機のシリアル番号。`adb devices -l` で確認する。
+    # 端末の選択に実際に使われるのはこちらで、device_name は表示用。
+    udid: ""
+    device_name: "Android 実機"
+
   ios:
-    device_name: "iPhone 16 Pro"
-    platform_version: "18.5"
     platform_name: "iOS"
     automation_name: "XCUITest"
+    # 実機の UDID。`xcrun devicectl list devices` で確認する。
+    udid: ""
+    device_name: "iPhone 実機"
+    # 端末の iOS バージョンと一致させる。
+    platform_version: ""
+
+    # --- 実機で必須の署名設定 ---
+    # WebDriverAgent を端末にインストールするために署名が要る。
+    # xcode_org_id は Apple Developer の Team ID(10 桁)。
+    # 設定が誤っていると xcodebuild が exit code 65 で落ちる。
+    xcode_org_id: ""
+    xcode_signing_id: "iPhone Developer"
+    # 無料の Apple ID を使う場合や、Bundle ID を固定したい場合に指定する。
+    updated_wda_bundle_id: ""
 
 copilot:
   # Copilot CLI の実行ファイル。
