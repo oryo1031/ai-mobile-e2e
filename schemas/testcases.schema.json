@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "試験項目",
+  "description": "testcase-designer が仕様から起こした試験項目。人のレビュー対象であり、テストコード生成の入力になる。",
+  "type": "object",
+  "required": ["feature", "testcases"],
+  "additionalProperties": false,
+  "properties": {
+    "feature": { "type": "string" },
+    "source_spec": { "type": "string" },
+    "testcases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "category", "priority", "steps"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^TC_[A-Z0-9_]+$",
+            "description": "試験項目 ID。証跡ファイル名と紐付く。"
+          },
+          "title": { "type": "string" },
+          "category": {
+            "type": "string",
+            "enum": ["normal", "abnormal", "boundary"],
+            "description": "正常系 / 異常系 / 境界値"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "preconditions": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["action", "target"],
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": ["tap", "input", "toggle", "scroll", "verify", "wait"]
+                },
+                "target": {
+                  "type": "string",
+                  "description": "ロケータ registry の id を参照する"
+                },
+                "value": { "type": "string" },
+                "expected": { "type": "string" },
+                "note": { "type": "string" }
+              }
+            }
+          },
+          "expected_result": {
+            "type": "string",
+            "description": "この試験項目全体としての期待結果"
+          }
+        }
+      }
+    }
+  }
+}

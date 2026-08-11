@@ -1,0 +1,57 @@
+# Copilot カスタムエージェントの定義。
+#
+# 本文は prompts/<prompt>.md にあり、このファイルは frontmatter に載せる
+# メタ情報だけを持つ。`e2e sync-agents` が両者を合成して
+# .github/agents/<name>.agent.md を生成する。
+#
+# プロンプト本体を単一ソースにしておくことで、VS Code のチャットから使う場合と
+# Copilot CLI から自動実行する場合で内容がずれないようにしている。
+
+agents:
+  - name: e2e-spec-analyst
+    prompt: spec-analyst
+    description: 設計書(Markdown)を正規化仕様 YAML に変換する
+    tools: ["search/codebase", "edit/editFiles", "read"]
+
+  - name: e2e-testcase-designer
+    prompt: testcase-designer
+    description: 正規化仕様から試験項目 YAML を設計する(人のレビュー対象)
+    tools: ["search/codebase", "edit/editFiles", "read"]
+
+  - name: e2e-locator-curator
+    prompt: locator-curator
+    description: ロケータレジストリを整備し、アプリ側への identifier 追加を提案する
+    tools: ["search/codebase", "edit/editFiles", "read", "runCommands"]
+
+  - name: e2e-test-codegen
+    prompt: test-codegen
+    description: 試験項目から pytest のテストコードを生成する
+    tools: ["search/codebase", "edit/editFiles", "read"]
+
+  - name: e2e-run-analyst
+    prompt: run-analyst
+    description: 実行結果と証跡から失敗を 4 分類して分析レポートを作る
+    tools: ["search/codebase", "edit/editFiles", "read"]
+
+orchestrator:
+  name: e2e-orchestrator
+  prompt: orchestrator
+  description: E2E テスト自動化ワークフロー全体の進行を管理する
+  tools: ["search/codebase", "edit/editFiles", "read", "runCommands", "agent"]
+  # 対話実行時の工程遷移。CLI から自動実行する場合は stages.py の定義が使われる。
+  handoffs:
+    - label: "1. 仕様を正規化する"
+      agent: e2e-spec-analyst
+      prompt: "設計書を読み込み、正規化仕様 YAML を作成してください。"
+    - label: "2. 試験項目を設計する"
+      agent: e2e-testcase-designer
+      prompt: "正規化仕様から試験項目 YAML を設計してください。"
+    - label: "3. ロケータを整備する"
+      agent: e2e-locator-curator
+      prompt: "試験項目が参照する要素をロケータレジストリに整備してください。"
+    - label: "4. テストコードを生成する"
+      agent: e2e-test-codegen
+      prompt: "試験項目と Page Object から pytest のテストコードを生成してください。"
+    - label: "5. 実行結果を分析する"
+      agent: e2e-run-analyst
+      prompt: "実行結果と証跡から失敗を分類し、分析レポートを作成してください。"

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "正規化仕様",
+  "description": "人が書いた設計書を spec-analyst が構造化したもの。試験項目生成の入力になる。",
+  "type": "object",
+  "required": ["feature", "screens", "flows"],
+  "additionalProperties": false,
+  "properties": {
+    "feature": {
+      "type": "string",
+      "description": "対象機能の名前"
+    },
+    "source_document": {
+      "type": "string",
+      "description": "元になった設計書のパス"
+    },
+    "summary": {
+      "type": "string",
+      "description": "機能の概要"
+    },
+    "screens": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "elements"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "画面の識別子。snake_case。"
+          },
+          "name": { "type": "string" },
+          "elements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "role", "description"],
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$",
+                  "description": "要素の識別子。ロケータ名の元になる。"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "button",
+                    "text",
+                    "text_field",
+                    "checkbox",
+                    "switch",
+                    "list_item",
+                    "image",
+                    "other"
+                  ]
+                },
+                "description": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "flows": {
+      "type": "array",
+      "minItems": 1,
+      "description": "設計書に書かれた操作の流れ。試験項目の骨格になる。",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "steps"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "name": { "type": "string" },
+          "preconditions": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["action", "target"],
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": ["tap", "input", "toggle", "scroll", "verify", "wait"]
+                },
+                "target": {
+                  "type": "string",
+                  "description": "screens[].elements[].id を参照する"
+                },
+                "value": { "type": "string" },
+                "expected": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "description": "設計書から読み取れなかった点。空でない限り次工程へ進めない。",
+      "items": { "type": "string" }
+    }
+  }
+}

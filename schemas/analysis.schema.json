@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "実行結果の分析",
+  "description": "run-analyst が実行結果と証跡から起こす分析レポート。人の結果確認の入力になる。",
+  "type": "object",
+  "required": ["run_id", "summary", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string" },
+    "summary": {
+      "type": "object",
+      "required": ["total", "passed", "failed"],
+      "additionalProperties": false,
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "失敗した試験項目ごとの分析。全件成功なら空配列。",
+      "items": {
+        "type": "object",
+        "required": ["testcase_id", "classification", "reasoning", "recommended_action"],
+        "additionalProperties": false,
+        "properties": {
+          "testcase_id": { "type": "string" },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "product_bug",
+              "flaky",
+              "test_defect",
+              "locator_defect"
+            ],
+            "description": "プロダクトバグ / 不安定 / テスト不備 / ロケータ不備"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "reasoning": {
+            "type": "string",
+            "description": "証跡のどこを見てそう判断したか"
+          },
+          "evidence": {
+            "type": "array",
+            "description": "根拠にした証跡ファイルのパス",
+            "items": { "type": "string" }
+          },
+          "recommended_action": { "type": "string" }
+        }
+      }
+    },
+    "notes": { "type": "string" }
+  }
+}

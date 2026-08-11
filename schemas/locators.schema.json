@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ロケータレジストリ",
+  "description": "テストが触れるすべての要素の単一ソース。Page Object はここから生成され、テストコードは Page Object 経由でしか要素に触れない。",
+  "type": "object",
+  "required": ["screens"],
+  "additionalProperties": false,
+  "properties": {
+    "screens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "elements"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "Page Object のクラス名の元になる"
+          },
+          "name": { "type": "string" },
+          "elements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "identifier", "role"],
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$",
+                  "description": "Page Object のメソッド名の元になる"
+                },
+                "identifier": {
+                  "type": "string",
+                  "description": "アプリ側の Semantics(identifier:) の値と完全一致すること"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "button",
+                    "text",
+                    "text_field",
+                    "checkbox",
+                    "switch",
+                    "list_item",
+                    "image",
+                    "other"
+                  ]
+                },
+                "description": { "type": "string" },
+                "scrollable": {
+                  "type": "boolean",
+                  "description": "画面外に出うる要素。true なら Page Object が scroll-into-view を挟む。",
+                  "default": true
+                },
+                "dynamic_index": {
+                  "type": "boolean",
+                  "description": "identifier に連番が入る要素(例: item_0)。true なら index 引数付きメソッドを生成する。",
+                  "default": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

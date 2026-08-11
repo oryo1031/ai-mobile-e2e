@@ -1,0 +1,11 @@
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+allure-results/
+
+# 実行ごとの成果物・証跡。state.json 込みで端末ローカルに閉じる。
+artifacts/

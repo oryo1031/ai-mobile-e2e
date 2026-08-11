@@ -1,0 +1,53 @@
+# E2E ハーネス設定
+#
+# このツールキットは開発端末上のアプリリポジトリ配下に置いて使う。
+# アプリ側のソースをこのリポジトリに取り込む必要はなく、下の app.root から
+# 相対的に参照する。開発端末ごとに変わる値はここだけを書き換える。
+
+app:
+  # アプリリポジトリのルート。このファイルからの相対パス、または絶対パス。
+  # 例: アプリの配下に tools/ai-mobile-e2e として置いたなら "../.."
+  root: "../.."
+
+  # Flutter のソースディレクトリ(app.root からの相対)。
+  # Semantics(identifier:) の静的走査対象。
+  lib_dir: "lib"
+
+  # アプリ識別子。
+  android_package: "com.example.app"
+  android_activity: ".MainActivity"
+  ios_bundle_id: "com.example.app"
+
+build:
+  # ビルド成果物のパス(app.root からの相対)。
+  android_apk: "build/app/outputs/flutter-apk/app-debug.apk"
+  ios_app: "build/ios/iphonesimulator/Runner.app"
+
+appium:
+  server_url: "http://127.0.0.1:4723"
+  android:
+    device_name: "emulator-5554"
+    platform_name: "Android"
+    automation_name: "UiAutomator2"
+  ios:
+    device_name: "iPhone 16 Pro"
+    platform_version: "18.5"
+    platform_name: "iOS"
+    automation_name: "XCUITest"
+
+copilot:
+  # Copilot CLI の実行ファイル。
+  command: "copilot"
+  # 再現性のためモデルを固定する。空にすると Copilot の既定に従う。
+  model: ""
+  # 各工程で許可するツール。工程ごとに上書きできる。
+  default_allow_tools: "read,write"
+  # 1 工程あたりのタイムアウト(秒)。
+  timeout_seconds: 900
+
+paths:
+  specs: "specs"
+  artifacts: "artifacts"
+  locators: "locators/registry.yaml"
+  generated_tests: "tests/e2e"
+  generated_pages: "tests/pages"

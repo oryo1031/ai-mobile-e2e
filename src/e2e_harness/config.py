@@ -1,0 +1,222 @@
+"""ハーネス設定の読み込み。
+
+このツールキットは開発端末上のアプリリポジトリ配下に置いて使うため、
+アプリの場所は e2e.config.yaml でのみ指定し、コード中に埋め込まない。
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+CONFIG_FILENAME = "e2e.config.yaml"
+
+
+class ConfigError(RuntimeError):
+    """設定が見つからない、または内容が不正。"""
+
+
+@dataclass(frozen=True)
+class AppConfig:
+    root: Path
+    lib_dir: Path
+    android_package: str
+    android_activity: str
+    ios_bundle_id: str
+
+
+@dataclass(frozen=True)
+class BuildConfig:
+    android_apk: Path
+    ios_app: Path
+
+
+@dataclass(frozen=True)
+class CopilotConfig:
+    command: str
+    model: str
+    default_allow_tools: str
+    timeout_seconds: int
+
+
+@dataclass(frozen=True)
+class Config:
+    root: Path
+    app: AppConfig
+    build: BuildConfig
+    appium: dict[str, Any]
+    copilot: CopilotConfig
+    paths: dict[str, str]
+
+    @property
+    def specs_dir(self) -> Path:
+        return self.root / self.paths["specs"]
+
+    @property
+    def artifacts_dir(self) -> Path:
+        return self.root / self.paths["artifacts"]
+
+    @property
+    def locators_path(self) -> Path:
+        return self.root / self.paths["locators"]
+
+    @property
+    def generated_tests_dir(self) -> Path:
+        return self.root / self.paths["generated_tests"]
+
+    @property
+    def generated_pages_dir(self) -> Path:
+        return self.root / self.paths["generated_pages"]
+
+    @property
+    def app_lib_dir(self) -> Path:
+        return self.app.root / self.app.lib_dir
+
+    @property
+    def android_apk_path(self) -> Path:
+        return self.app.root / self.build.android_apk
+
+    @property
+    def ios_app_path(self) -> Path:
+        return self.app.root / self.build.ios_app
+
+
+CONFIG_TEMPLATE = """\
+# E2E ハーネス設定
+#
+# このツールキットは開発端末上のアプリリポジトリ配下に置いて使う。
+# アプリ側のソースをこのリポジトリに取り込む必要はなく、下の app.root から
+# 相対的に参照する。開発端末ごとに変わる値はここだけを書き換える。
+
+app:
+  # アプリリポジトリのルート。このファイルからの相対パス、または絶対パス。
+  # 例: アプリの配下に tools/ai-mobile-e2e として置いたなら "../.."
+  root: "{app_root}"
+
+  # Flutter のソースディレクトリ(app.root からの相対)。
+  # Semantics(identifier:) の静的走査対象。
+  lib_dir: "{lib_dir}"
+
+  # アプリ識別子。
+  android_package: "{android_package}"
+  android_activity: "{android_activity}"
+  ios_bundle_id: "{ios_bundle_id}"
+
+build:
+  # ビルド成果物のパス(app.root からの相対)。
+  android_apk: "{android_apk}"
+  ios_app: "{ios_app}"
+
+appium:
+  server_url: "{server_url}"
+  android:
+    device_name: "{android_device}"
+    platform_name: "Android"
+    automation_name: "UiAutomator2"
+  ios:
+    device_name: "{ios_device}"
+    platform_version: "{ios_version}"
+    platform_name: "iOS"
+    automation_name: "XCUITest"
+
+copilot:
+  # Copilot CLI の実行ファイル。
+  command: "copilot"
+  # 再現性のためモデルを固定する。空にすると Copilot の既定に従う。
+  model: ""
+  # 各工程で許可するツール。工程ごとに上書きできる。
+  default_allow_tools: "read,write"
+  # 1 工程あたりのタイムアウト(秒)。
+  timeout_seconds: 900
+
+paths:
+  specs: "specs"
+  artifacts: "artifacts"
+  locators: "locators/registry.yaml"
+  generated_tests: "tests/e2e"
+  generated_pages: "tests/pages"
+"""
+
+
+def render_config(**values: str) -> str:
+    """設定ファイルの内容を組み立てる。
+
+    コメントを保ったまま再生成できるよう、既存ファイルを書き換えるのではなく
+    テンプレートから作り直す方式にしている。
+    """
+    defaults = {
+        "app_root": "../..",
+        "lib_dir": "lib",
+        "android_package": "com.example.app",
+        "android_activity": ".MainActivity",
+        "ios_bundle_id": "com.example.app",
+        "android_apk": "build/app/outputs/flutter-apk/app-debug.apk",
+        "ios_app": "build/ios/iphonesimulator/Runner.app",
+        "server_url": "http://127.0.0.1:4723",
+        "android_device": "emulator-5554",
+        "ios_device": "iPhone 16 Pro",
+        "ios_version": "18.5",
+    }
+    defaults.update({k: v for k, v in values.items() if v})
+    return CONFIG_TEMPLATE.format(**defaults)
+
+
+def find_config_file(start: Path | None = None) -> Path:
+    """カレントディレクトリから上に向かって e2e.config.yaml を探す。"""
+    current = (start or Path.cwd()).resolve()
+    for candidate in [current, *current.parents]:
+        path = candidate / CONFIG_FILENAME
+        if path.is_file():
+            return path
+    raise ConfigError(
+        f"{CONFIG_FILENAME} が見つかりません。ハーネスのルートで実行してください。"
+    )
+
+
+def load_config(path: Path | None = None) -> Config:
+    config_path = path or find_config_file()
+    root = config_path.parent
+    raw: dict[str, Any] = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    for key in ("app", "build", "appium", "copilot", "paths"):
+        if key not in raw:
+            raise ConfigError(f"{CONFIG_FILENAME} に '{key}' セクションがありません。")
+
+    app_raw = raw["app"]
+    # app.root は設定ファイルからの相対で解決する。開発端末ごとに
+    # 絶対パスが変わるため、相対指定できることが重要。
+    app_root = (root / str(app_raw["root"])).resolve()
+
+    app = AppConfig(
+        root=app_root,
+        lib_dir=Path(str(app_raw.get("lib_dir", "lib"))),
+        android_package=str(app_raw["android_package"]),
+        android_activity=str(app_raw.get("android_activity", ".MainActivity")),
+        ios_bundle_id=str(app_raw.get("ios_bundle_id", "")),
+    )
+
+    build_raw = raw["build"]
+    build = BuildConfig(
+        android_apk=Path(str(build_raw["android_apk"])),
+        ios_app=Path(str(build_raw["ios_app"])),
+    )
+
+    copilot_raw = raw["copilot"]
+    copilot = CopilotConfig(
+        command=str(copilot_raw.get("command", "copilot")),
+        model=str(copilot_raw.get("model", "")),
+        default_allow_tools=str(copilot_raw.get("default_allow_tools", "read,write")),
+        timeout_seconds=int(copilot_raw.get("timeout_seconds", 900)),
+    )
+
+    return Config(
+        root=root,
+        app=app,
+        build=build,
+        appium=raw["appium"],
+        copilot=copilot,
+        paths={str(k): str(v) for k, v in raw["paths"].items()},
+    )
