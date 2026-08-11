@@ -266,9 +266,9 @@ def cmd_sync_agents(config: Config, args: argparse.Namespace) -> int:
     print(f"\n{len(written)} 個のエージェント定義を同期しました。")
     if output_dir is None:
         print(
-            "\nアプリリポジトリに同梱する構成なら、アプリ直下の .github/agents/ へ\n"
-            "出力すると Copilot が既定で見つけられます:\n"
-            "  e2e sync-agents --output ../../.github/agents"
+            "\nVS Code の Copilot が探索するのはワークスペース直下の .github/agents/\n"
+            "です。アプリのルートを開いて使う場合は、そちらへ出力してください:\n"
+            "  e2e sync-agents --output ../.github/agents"
         )
     return 0
 
@@ -305,7 +305,11 @@ def cmd_ingest(config: Config, args: argparse.Namespace) -> int:
 
 
 def cmd_package(config: Config, args: argparse.Namespace) -> int:
-    """配布用の zip を作る。"""
+    """スナップショットの zip を作る。
+
+    通常の配布はアプリリポジトリ経由で行う。これは退避や、
+    リポジトリを介さず一時的に渡したいときのための補助。
+    """
     destination = Path(args.output)
     if not destination.is_absolute():
         destination = (Path.cwd() / destination).resolve()
@@ -394,28 +398,32 @@ def cmd_init(config: Config, args: argparse.Namespace) -> int:
     for path_str in removed:
         print(f"  削除: {path_str}")
 
-    # 6. エージェント定義を生成しておく。
-    agents_mod.sync(config.root)
-    print("  生成: .github/agents/ (6 エージェント)")
-
-    # VS Code がアプリリポジトリのルートを開いている場合、ハーネス配下の
-    # .github/agents/ は探索対象に入らない。設定で場所を教える必要がある。
+    # 6. エージェント定義を生成する。
+    #
+    # VS Code の Copilot が探索するのはワークスペース直下の .github/agents/ で、
+    # サブディレクトリに置いても見つけられない。アプリのルートを開いて使うため、
+    # 最初からそちらへ出す。ハーネス配下の複製は残さない。
     app_root = (config.root / args.app_root).resolve()
-    try:
-        harness_rel = config.root.resolve().relative_to(app_root)
-        agents_location = f"{harness_rel}/.github/agents"
-    except ValueError:
-        agents_location = str(config.root.resolve() / ".github/agents")
+    local_agents = config.root / agents_mod.AGENTS_DIR
 
-    print("\nVS Code でアプリリポジトリのルートを開く場合は、アプリ側の")
-    print(".vscode/settings.json に次を追加してください(これが無いと")
-    print("Copilot がエージェントを見つけられません):")
-    print()
-    print("  {")
-    print('    "chat.agentFilesLocations": {')
-    print(f'      "{agents_location}": true')
-    print("    }")
-    print("  }")
+    if app_root.is_dir() and app_root != config.root.resolve():
+        target = app_root / ".github" / "agents"
+        agents_mod.sync(config.root, target)
+        print(f"  生成: {target} (6 エージェント)")
+        if local_agents.is_dir():
+            shutil.rmtree(local_agents.parent, ignore_errors=True)
+            print("  削除: .github/ (ハーネス配下の複製は使われない)")
+    else:
+        agents_mod.sync(config.root)
+        print("  生成: .github/agents/ (6 エージェント)")
+        print(
+            f"  ! アプリのルート ({app_root}) が見つからないため、"
+            "ハーネス配下に出力しました。"
+        )
+        print(
+            "    アプリ配下に置いたあと "
+            "`e2e sync-agents --output ../.github/agents` を実行してください。"
+        )
 
     print("\n初期化しました。次の手順:")
     print("  1. uv run e2e doctor        # 前提条件を確認")
@@ -589,7 +597,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ingest_p.set_defaults(func=cmd_ingest)
 
-    package_p = sub.add_parser("package", help="配布用の zip を作る")
+    package_p = sub.add_parser(
+        "package", help="スナップショットの zip を作る(退避や一時共有用)"
+    )
     package_p.add_argument(
         "--output", default="ai-mobile-e2e.zip", help="出力先の zip パス"
     )
@@ -610,7 +620,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_p.add_argument(
         "--app-root",
-        default="../..",
+        default="..",
         help="アプリリポジトリのルート(このファイルからの相対パス)",
     )
     init_p.add_argument("--package", required=True, help="Android のパッケージ名")

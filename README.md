@@ -63,91 +63,82 @@ tests/e2e/*.py           ← AI 生成テスト
 
 ## 配置と初期設定
 
-このツールキットは**アプリフォルダの配下に置くだけ**で動く。アプリのソースを
-取り込む必要はなく、`e2e.config.yaml` の `app.root` から相対的に参照する。
+**アプリのリポジトリに含めて配る。** ハーネス一式をアプリリポジトリの一部として
+管理し、チームは通常の `git pull` で受け取る。
 
-配布のしかたは 2 通りある。どちらでも手順はほぼ同じで、違いは
-「Copilot にエージェントの場所をどう教えるか」だけ。
+この形にする理由は 2 つある。
 
-| | A. zip で配る | B. アプリのリポジトリに同梱する |
-|---|---|---|
-| 置き方 | zip をアプリフォルダ配下に展開する | アプリリポジトリに含めて push する |
-| エージェント定義 | ハーネス配下に置き、設定で場所を教える | アプリ直下の `.github/agents/` に出力する |
-| 追加設定 | `chat.agentFilesLocations` が必要 | **不要** |
+- **`locators/registry.yaml` はアプリのソースと同期していないと壊れる。**
+  registry の identifier はアプリの `Semantics(identifier:)` と完全一致していないと
+  検証ゲートで落ちる。アプリ側で identifier をリネームしたら、registry も
+  同じコミットで直す必要がある。別管理にすると構造的にこれができない。
+- **試験項目とテストコードが合流しない。** 別管理だと各自のコピーが分岐し、
+  数ヶ月かけて育つ `tests/e2e/` が共有されない。
 
-### 1. アプリフォルダ配下に置く
+### 1. アプリリポジトリ配下に置く
 
 ```
 your-flutter-app/
 ├── lib/
 ├── build/
-└── tools/
-    └── ai-mobile-e2e/     ← ここに置く
+├── .github/agents/         ← エージェント定義をここに出力する
+└── e2e/                    ← ハーネス一式
 ```
 
-zip で配る場合は展開するだけ。配布用の zip は `e2e package` で作れる。
+アプリのルートにある `.gitlab-ci.yml` や `.gitignore` には手を入れない。
+`.gitignore` はネストが効くので、`e2e/.gitignore` がそのまま働く。
+
+配置したら、アプリのルート `.gitignore` に巻き込まれていないか確認しておく。
+何も出力されなければよい。
 
 ```bash
-uv run e2e package --output ai-mobile-e2e.zip
+git check-ignore -v e2e/uv.lock e2e/package-lock.json e2e/e2e.config.yaml
 ```
-
-`.git`・`node_modules`・`.venv`・`artifacts` は含まれない。展開すると
-`ai-mobile-e2e/` の 1 階層になる。
 
 ### 2. 依存を入れる
 
 ```bash
-cd tools/ai-mobile-e2e
+cd e2e
 uv sync                     # Python 3.12 + Appium-Python-Client
 npm install                 # Appium 本体
 npx appium driver install uiautomator2
 npx appium driver install xcuitest
 ```
 
-いずれもネットワークが要る。配布先の端末で外部通信が制限されている場合は、
-`e2e package --include-node-modules` で Appium 本体ごと固めて配る。
-
 ### 3. 対象アプリ向けに初期化する
 
 ```bash
-uv run e2e init --app-root "../.." --package com.example.yourapp
+uv run e2e init --app-root ".." --package com.example.yourapp
 ```
 
-`e2e.config.yaml` が対象アプリ向けに作り直され、エージェント定義が生成される。
-`e2e.config.yaml` を直接書き換えても同じ。
+これで次の 2 つが行われる。
 
-### 4. Copilot にエージェントの場所を教える
+- `e2e.config.yaml` が対象アプリ向けに作り直される(直接書き換えても同じ)
+- **エージェント定義がアプリのルートの `.github/agents/` に出力される**
 
-**B(アプリリポジトリに同梱)の場合** — アプリ直下の `.github/agents/` に出力する。
-VS Code が既定で探索する場所なので、追加の設定はいらない。
+VS Code の Copilot が探索するのはワークスペース直下の `.github/agents/` だけで、
+サブディレクトリの `e2e/.github/agents/` は見つけられない。アプリのルートを開いて
+使うため、そちらへ出力し、ハーネス配下の複製は残さない。これでチームメンバーは
+**設定なしで**エージェントを選べる。
+
+`prompts/` を直したときは同期を再実行する。
 
 ```bash
-uv run e2e sync-agents --output ../../.github/agents
+uv run e2e sync-agents --output ../.github/agents
 ```
 
-**A(zip 配布)の場合** — エージェント定義はハーネス配下に残るため、VS Code に
-場所を教える必要がある。これが無いと Copilot はエージェントを見つけられない。
-アプリ側の `.vscode/settings.json` に追加する:
+> GitLab のリポジトリなのに `.github/` ができるのは、これが VS Code の規約で
+> ホスティング先と無関係なため。チームに先に説明しておくと余計な議論を避けられる。
 
-```json
-{
-  "chat.agentFilesLocations": {
-    "tools/ai-mobile-e2e/.github/agents": true
-  }
-}
-```
-
-`e2e init` がこの JSON をパス付きで出力するので、そのまま貼れる。
-ハーネスのフォルダ自体を VS Code で開く運用なら、この設定は不要。
-
-### 5. 前提条件を確認する
+### 4. 前提条件を確認する
 
 ```bash
 uv run e2e doctor
 ```
 
-アプリのソース、ビルド成果物、Appium CLI、**Appium サーバが応答するか**、
-adb、Copilot CLI、レジストリ、エージェント定義をまとめて確認する。
+アプリのソース、ビルド成果物、Appium CLI、adb、**Android 端末が接続されているか**、
+**アプリが投入済みか**、**Appium サーバが応答するか**、Copilot CLI、レジストリ、
+エージェント定義をまとめて確認する。詰まったらまずこれを叩く。
 
 Appium サーバとエミュレータ/シミュレータの起動はハーネスの外にある。
 別のターミナルで先に立ち上げておくこと。
@@ -278,10 +269,10 @@ uv run e2e gen-pages        # レジストリから Page Object を再生成
 uv run e2e gate <工程>       # 特定工程の検証ゲートだけ実行
 uv run e2e resume --run <ID> # 過去の実行を再開
 uv run e2e sync-agents      # プロンプトからエージェント定義を再生成
-uv run e2e package          # 配布用の zip を作る
 ```
 
-プロンプト(`prompts/`)を直すたびに `e2e sync-agents` を実行する。
+プロンプト(`prompts/`)を直すたびに
+`e2e sync-agents --output ../.github/agents` を実行する。
 エージェント定義は生成物なので、直接編集しても次の同期で上書きされる。
 
 ## アプリ側に必要な対応
