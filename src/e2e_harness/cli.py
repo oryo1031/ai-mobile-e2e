@@ -91,6 +91,27 @@ def _ios_devices_output() -> str:
     return ""
 
 
+def _is_ios_app_installed(udid: str, bundle_id: str) -> bool:
+    """iOS 実機にアプリが入っているか。
+
+    IDE からビルドして端末に入れる運用では、ビルド成果物のパスを
+    当てにできない(Xcode の出力先は DerivedData)。端末側を見る。
+    """
+    if not udid or not bundle_id or shutil.which("xcrun") is None:
+        return False
+    try:
+        proc = subprocess.run(  # noqa: S603
+            ["xcrun", "devicectl", "device", "info", "apps", "--device", udid],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return bundle_id in proc.stdout
+
+
 def _is_app_installed(package: str) -> bool:
     if not package or shutil.which("adb") is None:
         return False
@@ -589,11 +610,15 @@ def cmd_doctor(config: Config, args: argparse.Namespace) -> int:
 
     # --- Android ---
     if check_android:
+        # IDE からビルドして端末へ入れる運用ではファイルが無くて当然なので、
+        # 必須にしない。Appium に投入させたい場合にだけ要る。
         check(
             f"Android ビルド成果物: {config.android_apk_path.name}",
             config.android_apk_path.is_file(),
-            "flutter build apk --debug --target-platform android-arm64"
-            " --split-per-abi を実行してください。",
+            "IDE からビルドして端末へ入れる運用なら不要です。"
+            " コマンドでビルドする場合は flutter build apk --debug"
+            " --target-platform android-arm64 --split-per-abi を実行してください。",
+            required=False,
         )
         check(
             "adb",
@@ -618,28 +643,29 @@ def cmd_doctor(config: Config, args: argparse.Namespace) -> int:
                 f"      複数台つなぐ場合は udid を設定してください:"
                 f" {', '.join(devices)}"
             )
-        # ビルドが入れ替わっていない事故を避けるため、投入済みかも見る。
+        # 実機に入っているかが本命。ファイルの有無より確実。
         if devices:
             check(
-                f"アプリの投入 ({config.app.android_package})",
+                f"アプリが端末に入っているか ({config.app.android_package})",
                 _is_app_installed(config.app.android_package),
-                "adb install -r <APK> でアプリを投入してください。"
-                " 既に入っている場合も、修正後は必ず入れ直すこと。",
+                "IDE からビルドして端末へ入れてください。"
+                " コマンドの場合は adb install -r <APK>。"
+                " アプリを直したら入れ直すこと。",
             )
     else:
         skip("Android 関連")
 
     # --- iOS ---
     if check_ios:
-        # シミュレータ用ビルドは実機で動かない。パスの取り違えが起きやすい。
+        # Xcode の出力先は DerivedData なので、IDE ビルドではここに出ない。
+        # Appium に投入させたい場合にだけ要るため、必須にしない。
         check(
             f"iOS ビルド成果物: {config.ios_app_path.name}",
             config.ios_app_path.is_dir()
             and "iphonesimulator" not in str(config.build.ios_app),
-            "flutter build ios --release を実行してください。"
-            " 実機では debug ビルドは Appium から起動できません。"
-            " build.ios_app が iphonesimulator を指している場合は"
-            " build/ios/iphoneos/Runner.app に変更してください。",
+            "IDE からビルドして端末へ入れる運用なら不要です。"
+            " コマンドでビルドする場合は flutter build ios --release。",
+            required=False,
         )
         ios_cfg = config.appium.get("ios", {})
         ios_udid = str(ios_cfg.get("udid", ""))
@@ -662,6 +688,14 @@ def cmd_doctor(config: Config, args: argparse.Namespace) -> int:
             " Team ID を appium.ios.xcode_org_id に設定してください。"
             " 未設定だと xcodebuild が exit code 65 で落ちます。",
         )
+        if ios_udid:
+            check(
+                f"アプリが端末に入っているか ({config.app.ios_bundle_id})",
+                _is_ios_app_installed(ios_udid, config.app.ios_bundle_id),
+                "Xcode からビルドして端末へ入れてください。"
+                " **スキームの Build Configuration を Release にすること。**"
+                " debug のまま入れると Appium から起動できません。",
+            )
     else:
         skip("iOS 関連")
 

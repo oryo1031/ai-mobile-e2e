@@ -107,8 +107,15 @@ app:
 
 build:
   # ビルド成果物のパス(app.root からの相対)。
-  # iOS は実機用の release ビルド(iphoneos)であること。
-  # iOS 14 以降、debug ビルドは Appium から起動できない(JIT 制約のため)。
+  #
+  # これは Appium にインストールまでさせたい場合にだけ使う。IDE の実行ボタンで
+  # 端末に入れる運用では参照されない(Xcode の出力先は DerivedData のため、
+  # そもそもこのパスには出ない)。ハーネスは端末に入っているアプリを
+  # appPackage / bundleId から起動するだけ。
+  #
+  # iOS 実機は release ビルドであること。iOS 14 以降、debug ビルドは
+  # Appium から起動できない(JIT 制約のため)。Xcode の実行ボタンを使う場合は
+  # スキームの Build Configuration を Release にしておく。
   android_apk: "{android_apk}"
   ios_app: "{ios_app}"
 

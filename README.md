@@ -343,17 +343,14 @@ uv run e2e scan-app
 
 ### 3. 端末で実際に操作できる状態にする
 
+identifier を付けたアプリをビルドして端末に入れる。**IDE の実行ボタンでよい。**
+
+- Android Studio の実行ボタン(debug で問題ない)
+- Xcode の実行ボタン(**スキームを Release にしておくこと**)
+
+Appium サーバを別ターミナルで起動する。
+
 ```bash
-cd <アプリのルート>
-
-# Android
-flutter build apk --debug --target-platform android-arm64 --split-per-abi
-adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
-
-# iOS(実機は release。debug は Appium から起動できない)
-flutter build ios --release
-
-# 別ターミナルで
 npx appium --port 4723
 ```
 
@@ -427,42 +424,78 @@ uv run pytest tests/e2e/test_smoke.py --platform android -v
 
 ## 実行前の準備(毎回)
 
-Appium サーバの起動とアプリの投入はハーネスの外にあるので、先に済ませておく。
+アプリのビルドと端末への投入、Appium サーバの起動はハーネスの外にあるので、
+先に済ませておく。
+
+### 1. アプリをビルドして端末に入れる
+
+**IDE のビルド/実行ボタンで入れてよい。** ハーネスはアプリを自分でインストール
+しない。端末に入っているアプリを `appPackage` / `bundleId` から起動するだけなので、
+どうやって入れたかは問わない。
+
+| | 使うもの | 注意 |
+|---|---|---|
+| Android | Android Studio の実行ボタン | debug で問題ない |
+| iOS | Xcode の実行ボタン | **スキームを Release にすること**(下記) |
+
+コマンドで入れることもできる。その場合は次のとおり。
 
 ```bash
-# 1. Appium サーバを起動する(別ターミナル)
-npx appium --port 4723
-
-# 2. アプリをビルドして端末に入れる
 cd <アプリのルート>
 
-# Android(debug で問題ない)
+# Android
 flutter build apk --debug --target-platform android-arm64 --split-per-abi
 adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
 
-# iOS(実機は release。debug は Appium から起動できない)
+# iOS
 flutter build ios --release
+```
 
-# 3. 準備できているか確認する(その日に使うプラットフォームだけ絞る)
-cd e2e && uv run e2e doctor --platform android
+> `e2e.config.yaml` の `build.android_apk` / `build.ios_app` は、Appium に
+> インストールまでさせたい場合にだけ使う。IDE で入れる運用では参照されず、
+> `doctor` でも「任意」扱いになる。Xcode の出力先は DerivedData なので、
+> IDE ビルドではそもそもこのパスに成果物は出ない。
+
+**アプリを直したら必ず入れ直すこと。** IDE の実行ボタンは毎回入れ直すので
+通常は問題ないが、コマンドで入れる場合は Appium が同一バージョンの
+再インストールをスキップする。「直したはずの不具合でテストが落ち続ける」
+「付けたはずの identifier が実行時に見つからない」という症状が出たら、
+まずここを疑う。
+
+### 2. Appium サーバを起動する
+
+別ターミナルで起動したままにする。
+
+```bash
+npx appium --port 4723
+```
+
+### 3. 準備できているか確認する
+
+```bash
+cd <アプリのルート>/e2e
+uv run e2e doctor --platform android
 ```
 
 `✗`(必須)が無ければ実行してよい。`△`(任意)と `-`(対象外)は残っていて構わない。
+**アプリが端末に入っているか**は実機側を見て確認するので、IDE で入れた場合も
+正しく判定される。
 
-**手順 2 を飛ばさないこと。** Appium は署名とバージョンが同じ APK の再インストールを
-スキップするため、アプリを直しても古いビルドがテストされ続ける。
-「直したはずの不具合でテストが落ち続ける」「付けたはずの identifier が
-実行時に見つからない」という症状が出たら、まずここを疑う。
-
-iOS は `build.ios_app` に実機用ビルドがあれば Appium が投入する。
-無ければ導入済みの前提で `bundleId` から起動する。
-
-### iOS 実機で debug ビルドは使えない
+### iOS 実機で debug ビルドは使えない — Xcode のスキーム設定が要る
 
 **iOS 14 以降、Flutter の debug ビルドは Flutter のツールか Xcode からしか
-起動できない。** ホーム画面からも Appium からも起動できないため、実機のテストでは
-`--release`(または `--profile`)でビルドする必要がある。debug は JIT で動くため、
-iOS 側の制約がかかる。
+起動できない。** ホーム画面からも Appium からも起動できない。debug は JIT で
+動くため、iOS 側の制約がかかる。
+
+Appium はテストのたびにアプリを終了して起動し直すので、**この「起動し直し」が
+debug ビルドでは失敗する。** Xcode の実行ボタンで入れた直後は動いているように
+見えても、テストを流すと落ちる。
+
+Xcode で実行ボタンを使う場合は、スキームの設定を変えておくこと。
+
+```
+Product > Scheme > Edit Scheme... > Run > Info > Build Configuration → Release
+```
 
 release で問題ないのは、本ハーネスが **Appium のネイティブドライバ
 (XCUITest)を使っているから**。Flutter Driver 系は release に対応しないが、
