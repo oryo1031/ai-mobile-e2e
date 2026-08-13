@@ -113,6 +113,7 @@ def _status_mark(status: StageStatus) -> str:
         StageStatus.FAILED: "✗",
         StageStatus.RUNNING: "…",
         StageStatus.AWAITING_REVIEW: "⏸",
+        StageStatus.AWAITING_MANUAL: "⏸",
         StageStatus.PENDING: " ",
     }[status]
 

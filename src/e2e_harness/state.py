@@ -23,6 +23,9 @@ class StageStatus(StrEnum):
     FAILED = "failed"
     # 人のレビュー待ちで止まっている状態。
     AWAITING_REVIEW = "awaiting_review"
+    # 手動モードで、人がプロンプトを実行するのを待っている状態。
+    # 正常な進行であり、失敗ではない。
+    AWAITING_MANUAL = "awaiting_manual"
 
 
 @dataclass

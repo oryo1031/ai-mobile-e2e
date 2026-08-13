@@ -10,6 +10,7 @@ Copilot には複数エージェントを制御する API が無いため、進�
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from . import copilot as copilot_mod
@@ -27,12 +28,33 @@ from .validation import ValidationResult
 MAX_ATTEMPTS = 3
 
 
+class AgentOutcome(StrEnum):
+    #: エージェントが動いて成果物を書いた。
+    DONE = "done"
+    #: 手動モード。プロンプトを書き出し、人の実行を待っている。
+    AWAITING_HUMAN = "awaiting_human"
+    #: 呼び出し自体が失敗した。
+    FAILED = "failed"
+
+
+@dataclass
+class AgentInvocation:
+    outcome: AgentOutcome
+    message: str = ""
+    prompt_path: Path | None = None
+    agent: str = ""
+
+
 @dataclass
 class StageOutcome:
     stage: str
     status: StageStatus
     message: str = ""
     result: ValidationResult | None = None
+    #: 手動モードで書き出したプロンプトの場所。
+    prompt_path: Path | None = None
+    #: 手動モードで貼り付ける先のエージェント名。
+    agent: str = ""
 
 
 class Reporter:
@@ -163,8 +185,12 @@ class Runner:
         self.reporter.info(f"Page Object を再生成: {len(written)} ファイル")
 
     # ------------------------------------------------------------------
-    def invoke_agent(self, stage: Stage, extra: str = "") -> tuple[bool, str]:
-        """担当エージェントを呼ぶ。戻り値は (成功したか, メッセージ)。"""
+    def invoke_agent(self, stage: Stage, extra: str = "") -> AgentInvocation:
+        """担当エージェントを呼ぶ。
+
+        手動モードでは実際には呼ばず、プロンプトを書き出して「待機」を返す。
+        これは正常な進行であり、失敗と区別する必要がある。
+        """
         assert stage.build_prompt is not None
         assert stage.agent is not None
         assert stage.prompt_name is not None
@@ -182,7 +208,12 @@ class Runner:
                 agent=stage.agent,
                 prompt=f"{task}\n\n---\n\n{instructions}",
             )
-            return False, f"手動実行用のプロンプトを書き出しました: {path}"
+            return AgentInvocation(
+                outcome=AgentOutcome.AWAITING_HUMAN,
+                message=f"プロンプトを書き出しました: {path}",
+                prompt_path=path,
+                agent=stage.agent,
+            )
 
         result = copilot_mod.run_cli(
             command=self.config.copilot.command,
@@ -199,8 +230,11 @@ class Runner:
             (result.stdout or "") + "\n" + (result.stderr or ""), encoding="utf-8"
         )
         if not result.ok:
-            return False, f"Copilot の実行が失敗しました (exit={result.returncode})"
-        return True, ""
+            return AgentInvocation(
+                outcome=AgentOutcome.FAILED,
+                message=f"Copilot の実行が失敗しました (exit={result.returncode})",
+            )
+        return AgentInvocation(outcome=AgentOutcome.DONE)
 
     # ------------------------------------------------------------------
     def run_stage(self, stage: Stage) -> StageOutcome:
@@ -241,6 +275,11 @@ class Runner:
         # ことがある。その場合は成果物が既に揃っているので、プロンプトを
         # 再発行せずゲートだけ通して先へ進める。これが無いと手動モードで
         # ワークフローが永久に進まない。
+        #
+        # ゲートが落ちている場合は、その内容を次に書き出すプロンプトへ渡す。
+        # そうしないと人は同じプロンプトを渡されるだけで、何が悪かったのかが
+        # 分からない。
+        feedback = ""
         if self.mode is ExecutionMode.MANUAL and stage.gate is not None:
             existing = stage.gate(self.context)
             if existing.ok:
@@ -250,21 +289,40 @@ class Runner:
                 stage_state.error = None
                 self.save()
                 return StageOutcome(stage.name, StageStatus.COMPLETED, result=existing)
+            if stage_state.attempts > 0:
+                # 一度は人が実行したあと。落ちた理由を伝える。
+                feedback = "\n".join(f"- {e}" for e in existing.errors)
+                self.reporter.failure("前回の成果物が検証ゲートを通りませんでした")
+                for error in existing.errors[:10]:
+                    self.reporter.info(error)
 
         # AI 工程。ゲートが落ちたら内容を添えて差し戻す。
-        feedback = ""
         for attempt in range(1, MAX_ATTEMPTS + 1):
             stage_state.attempts = attempt
             self.save()
             if attempt > 1:
                 self.reporter.info(f"再試行 {attempt}/{MAX_ATTEMPTS}")
 
-            ok, message = self.invoke_agent(stage, feedback)
-            if not ok:
-                stage_state.status = StageStatus.FAILED
-                stage_state.error = message
+            invocation = self.invoke_agent(stage, feedback)
+            if invocation.outcome is AgentOutcome.AWAITING_HUMAN:
+                # 正常な進行。失敗として記録しない。
+                stage_state.status = StageStatus.AWAITING_MANUAL
+                stage_state.error = None
                 self.save()
-                return StageOutcome(stage.name, StageStatus.FAILED, message=message)
+                return StageOutcome(
+                    stage.name,
+                    StageStatus.AWAITING_MANUAL,
+                    message=invocation.message,
+                    prompt_path=invocation.prompt_path,
+                    agent=invocation.agent,
+                )
+            if invocation.outcome is AgentOutcome.FAILED:
+                stage_state.status = StageStatus.FAILED
+                stage_state.error = invocation.message
+                self.save()
+                return StageOutcome(
+                    stage.name, StageStatus.FAILED, message=invocation.message
+                )
 
             if stage.gate is None:
                 break
@@ -316,6 +374,15 @@ class Runner:
                 self.reporter.warning("人の確認待ちで停止します。")
                 self.reporter.info(outcome.message)
                 self.reporter.info(f"承認: e2e approve {stage.name}")
+                return outcome
+            if outcome.status is StageStatus.AWAITING_MANUAL:
+                # 手動モードの正常な停止。失敗ではない。
+                self.reporter.warning("人による実行待ちで停止します。")
+                self.reporter.info("1. VS Code の Copilot Chat を開く")
+                self.reporter.info(f"2. エージェント選択で `{outcome.agent}` を選ぶ")
+                self.reporter.info("3. 次のファイルの内容を貼り付けて実行する")
+                self.reporter.info(f"     {outcome.prompt_path}")
+                self.reporter.info("4. 終わったら `e2e resume` で次へ進む")
                 return outcome
             self.reporter.failure(outcome.message or f"{stage.title} が失敗しました。")
             return outcome
