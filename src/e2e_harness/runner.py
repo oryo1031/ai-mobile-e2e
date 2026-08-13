@@ -290,9 +290,10 @@ class Runner:
                 self.save()
                 return StageOutcome(stage.name, StageStatus.COMPLETED, result=existing)
             if stage_state.attempts > 0:
-                # 一度は人が実行したあと。落ちた理由を伝える。
+                # 一度は案内済み。まだ通っていない理由を伝える。
+                # 成果物が未作成の場合もここに来るため、「落ちた」とは書かない。
                 feedback = "\n".join(f"- {e}" for e in existing.errors)
-                self.reporter.failure("前回の成果物が検証ゲートを通りませんでした")
+                self.reporter.warning("この工程はまだ検証を通っていません:")
                 for error in existing.errors[:10]:
                     self.reporter.info(error)
 
@@ -382,7 +383,9 @@ class Runner:
                 self.reporter.info(f"2. エージェント選択で `{outcome.agent}` を選ぶ")
                 self.reporter.info("3. 次のファイルの内容を貼り付けて実行する")
                 self.reporter.info(f"     {outcome.prompt_path}")
-                self.reporter.info("4. 終わったら `e2e resume` で次へ進む")
+                self.reporter.info(
+                    "4. 終わったら、このターミナルに戻って `e2e resume` を実行する"
+                )
                 return outcome
             self.reporter.failure(outcome.message or f"{stage.title} が失敗しました。")
             return outcome

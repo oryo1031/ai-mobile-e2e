@@ -131,10 +131,10 @@ def cmd_run(config: Config, args: argparse.Namespace) -> int:
     print(f"実行 ID: {run_state.run_id}")
     print(f"設計書  : {run_state.spec_document}")
     print(f"対象    : {run_state.platform}")
-    print(f"実行方式: {mode.value}")
+    print(f"実行方式: {mode.label}")
     if mode is copilot_mod.ExecutionMode.MANUAL:
         print(
-            "  Copilot CLI が見つからないため手動モードです。"
+            "  Copilot CLI が見つからないため手動になりました。"
             "各工程のプロンプトをファイルに書き出します。"
         )
 
@@ -147,7 +147,8 @@ def cmd_resume(config: Config, args: argparse.Namespace) -> int:
     run_id = _resolve_run_id(config, args.run)
     run_state = state_mod.load(config.artifacts_dir, run_id)
     mode = copilot_mod.resolve_mode(args.mode, config.copilot.command)
-    print(f"実行 ID: {run_id} を再開します(実行方式: {mode.value})")
+    print(f"実行 ID: {run_id} を再開します")
+    print(f"実行方式: {mode.label}")
     runner = Runner(config, run_state, mode=mode)
     outcome = runner.run(until=args.until)
     return 0 if outcome is None or outcome.status is not StageStatus.FAILED else 1

@@ -20,6 +20,17 @@ class ExecutionMode(StrEnum):
     #: プロンプトをファイルに書き出し、人が VS Code のチャットで実行する。
     MANUAL = "manual"
 
+    @property
+    def label(self) -> str:
+        """人に見せる表記。
+
+        内部値をそのまま出すと「Copilot CLI で操作するのか」と
+        誤解されるため、何が起きるかを添える。
+        """
+        if self is ExecutionMode.CLI:
+            return "自動 (Copilot CLI を e2e が呼び出す)"
+        return "手動 (プロンプトを書き出すので VS Code のチャットに貼る)"
+
 
 @dataclass
 class CopilotResult:
