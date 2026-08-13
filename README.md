@@ -116,14 +116,29 @@ uv run e2e init \
 これで次の 2 つが行われる。
 
 - `e2e.config.yaml` が対象アプリ向けに作り直される(直接書き換えても同じ)
-- **エージェント定義がアプリのルートの `.github/agents/` に出力される**
+- **エージェント定義が 2 か所に出力される**
 
-VS Code の Copilot が探索するのはワークスペース直下の `.github/agents/` だけで、
-サブディレクトリの `e2e/.github/agents/` は見つけられない。アプリのルートを開いて
-使うため、そちらへ出力し、ハーネス配下の複製は残さない。これでチームメンバーは
-**設定なしで**エージェントを選べる。
+### エージェント定義が 2 か所に要る理由
 
-`prompts/` を直したときは同期を再実行する。
+VS Code と Copilot CLI で探索の仕方が違うため、**両方に置かないと片方の経路で
+エージェントが 1 つも見つからない。**
+
+| 使うもの | 探す場所 |
+|---|---|
+| VS Code | ワークスペース直下の `.github/agents/` **のみ**。サブディレクトリは見ない |
+| Copilot CLI | 作業ディレクトリから **git ルート**までの `.github/agents/` |
+
+ハーネスを `git clone` で持ってきた場合、`e2e/` 自体が git ルートになる。
+このとき Copilot CLI は `e2e/.github/agents/` を見るので、そこに無いと
+
+```
+No such agent: e2e-spec-analyst, available:
+```
+
+となって実行できない。一方 VS Code はアプリのルートを開いて使うので、
+そちらにも要る。`e2e init` は両方へ出力する。
+
+`prompts/` を直したときは同期を再実行する(こちらも両方に書く)。
 
 ```bash
 uv run e2e sync-agents --output ../.github/agents

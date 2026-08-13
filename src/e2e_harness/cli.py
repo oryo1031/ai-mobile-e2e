@@ -329,19 +329,27 @@ def cmd_gate(config: Config, args: argparse.Namespace) -> int:
 
 
 def cmd_sync_agents(config: Config, args: argparse.Namespace) -> int:
-    output_dir = Path(args.output).resolve() if args.output else None
-    written = agents_mod.sync(config.root, output_dir)
-    for path in written:
-        try:
-            display = path.relative_to(config.root)
-        except ValueError:
-            display = path
-        print(f"  生成: {display}")
-    print(f"\n{len(written)} 個のエージェント定義を同期しました。")
-    if output_dir is None:
+    """エージェント定義を再生成する。
+
+    ハーネス配下には常に出力する。Copilot CLI は作業ディレクトリから
+    git ルートまでを探すため、ハーネスが単独の git リポジトリの場合は
+    ここに無いと 1 つも見つからない。
+
+    --output を指定すると、そこにも複製する(VS Code 用にアプリのルートへ)。
+    """
+    written = agents_mod.sync(config.root)
+    print(f"  生成: .github/agents/ ({len(written)} ファイル / Copilot CLI 用)")
+
+    if args.output:
+        output_dir = Path(args.output)
+        if not output_dir.is_absolute():
+            output_dir = (config.root / output_dir).resolve()
+        agents_mod.sync(config.root, output_dir)
+        print(f"  生成: {output_dir} ({len(written)} ファイル / VS Code 用)")
+    else:
         print(
-            "\nVS Code の Copilot が探索するのはワークスペース直下の .github/agents/\n"
-            "です。アプリのルートを開いて使う場合は、そちらへ出力してください:\n"
+            "\nVS Code の Copilot はワークスペース直下の .github/agents/ しか"
+            "探しません。\nアプリのルートを開いて使う場合は、そちらにも出力してください:\n"
             "  e2e sync-agents --output ../.github/agents"
         )
     return 0
@@ -486,25 +494,28 @@ def cmd_init(config: Config, args: argparse.Namespace) -> int:
 
     # 6. エージェント定義を生成する。
     #
-    # VS Code の Copilot が探索するのはワークスペース直下の .github/agents/ で、
-    # サブディレクトリに置いても見つけられない。アプリのルートを開いて使うため、
-    # 最初からそちらへ出す。ハーネス配下の複製は残さない。
+    # VS Code と Copilot CLI で探索の仕方が違うため、両方に置く。
+    #
+    # - VS Code: ワークスペース直下の .github/agents/ のみ。アプリのルートを
+    #   開いて使うので、そちらに要る
+    # - Copilot CLI: 作業ディレクトリから **git ルート** までの .github/agents/。
+    #   ハーネスを単独の git リポジトリとして配置した場合、git ルートは
+    #   ハーネス自身になるため、ハーネス配下にも要る
+    #
+    # どちらか一方だけにすると、片方の経路でエージェントが 1 つも見つからない。
     app_root = (config.root / args.app_root).resolve()
-    local_agents = config.root / agents_mod.AGENTS_DIR
+
+    agents_mod.sync(config.root)
+    print("  生成: .github/agents/ (6 エージェント / Copilot CLI 用)")
 
     if app_root.is_dir() and app_root != config.root.resolve():
         target = app_root / ".github" / "agents"
         agents_mod.sync(config.root, target)
-        print(f"  生成: {target} (6 エージェント)")
-        if local_agents.is_dir():
-            shutil.rmtree(local_agents.parent, ignore_errors=True)
-            print("  削除: .github/ (ハーネス配下の複製は使われない)")
+        print(f"  生成: {target} (6 エージェント / VS Code 用)")
     else:
-        agents_mod.sync(config.root)
-        print("  生成: .github/agents/ (6 エージェント)")
         print(
             f"  ! アプリのルート ({app_root}) が見つからないため、"
-            "ハーネス配下に出力しました。"
+            "ハーネス配下にのみ出力しました。"
         )
         print(
             "    アプリ配下に置いたあと "
@@ -660,17 +671,24 @@ def cmd_doctor(config: Config, args: argparse.Namespace) -> int:
         config.locators_path.is_file(),
         "最初の実行時に locator-curator が作成します。",
     )
-    # init はアプリのルートへ出力してハーネス配下の複製を消すため、
-    # 両方を見てどちらかにあれば良しとする。
-    agents_locations = [
-        config.app.root / ".github" / "agents",
-        config.root / ".github" / "agents",
-    ]
+    # VS Code と Copilot CLI で探索の仕方が違うため、置き場所が 2 つある。
+    # 使う経路に必要な方が無いと、エージェントが 1 つも見つからない。
+    harness_agents = config.root / ".github" / "agents"
+    app_agents = config.app.root / ".github" / "agents"
     check(
-        "Copilot エージェント定義",
-        any(path.is_dir() for path in agents_locations),
-        "e2e sync-agents --output ../.github/agents を実行してください。",
+        "Copilot エージェント定義 (VS Code 用: アプリのルート)",
+        app_agents.is_dir(),
+        f"{app_agents} が必要です。"
+        " e2e sync-agents --output ../.github/agents を実行してください。",
     )
+    if copilot_mod.cli_available(config.copilot.command):
+        # CLI は作業ディレクトリから git ルートまでしか探さない。
+        # ハーネスが単独の git リポジトリなら、ここに無いと見つからない。
+        check(
+            "Copilot エージェント定義 (CLI 用: ハーネス配下)",
+            harness_agents.is_dir(),
+            f"{harness_agents} が必要です。e2e sync-agents を実行してください。",
+        )
     # 手動モードが正式な運用のひとつなので、無くても失敗にはしない。
     check(
         f"Copilot CLI ({config.copilot.command})",
