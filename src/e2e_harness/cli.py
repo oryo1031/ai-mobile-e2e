@@ -423,13 +423,25 @@ def cmd_init(config: Config, args: argparse.Namespace) -> int:
     config_path.write_text(
         render_config(
             app_root=args.app_root,
-            android_package=args.package,
-            android_activity=args.activity,
-            ios_bundle_id=args.bundle_id or args.package,
+            android_package=args.android_package,
+            android_activity=args.android_activity,
+            # 省略時は Android と同じ識別子とみなす。異なるアプリでは
+            # 明示が要るため、下で実際に使う値を表示する。
+            ios_bundle_id=args.ios_bundle_id or args.android_package,
         ),
         encoding="utf-8",
     )
-    print(f"  更新: {CONFIG_FILENAME} (app.root={args.app_root})")
+    ios_bundle_id = args.ios_bundle_id or args.android_package
+    print(f"  更新: {CONFIG_FILENAME}")
+    print(f"       app.root          = {args.app_root}")
+    print(f"       android_package   = {args.android_package}")
+    print(f"       android_activity  = {args.android_activity}")
+    print(f"       ios_bundle_id     = {ios_bundle_id}")
+    if not args.ios_bundle_id:
+        print(
+            "       ! iOS の Bundle ID は Android と同じとみなしました。"
+            "異なる場合は --ios-bundle-id で指定してください。"
+        )
 
     # 2. ロケータレジストリを空にする。
     config.locators_path.parent.mkdir(parents=True, exist_ok=True)
@@ -742,9 +754,23 @@ def build_parser() -> argparse.ArgumentParser:
         default="..",
         help="アプリリポジトリのルート(このファイルからの相対パス)",
     )
-    init_p.add_argument("--package", required=True, help="Android のパッケージ名")
-    init_p.add_argument("--activity", default=".MainActivity", help="起動 Activity")
-    init_p.add_argument("--bundle-id", default="", help="iOS の Bundle ID")
+    # プラットフォームが名前から分かるようにする。
+    # 単に --package だと、どちらの識別子か読み取れない。
+    init_p.add_argument(
+        "--android-package",
+        required=True,
+        help="Android のパッケージ名 (例: com.example.app)",
+    )
+    init_p.add_argument(
+        "--android-activity",
+        default=".MainActivity",
+        help="Android の起動 Activity (既定: .MainActivity)",
+    )
+    init_p.add_argument(
+        "--ios-bundle-id",
+        default="",
+        help="iOS の Bundle ID。省略すると --android-package の値を流用する",
+    )
     init_p.add_argument(
         "--keep-specs", action="store_true", help="specs/ の既存ファイルを残す"
     )

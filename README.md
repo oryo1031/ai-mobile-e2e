@@ -108,7 +108,9 @@ npx appium driver install xcuitest
 ### 3. 対象アプリ向けに初期化する
 
 ```bash
-uv run e2e init --app-root ".." --package com.example.yourapp
+uv run e2e init \
+  --android-package com.example.yourapp \
+  --ios-bundle-id com.example.yourapp
 ```
 
 これで次の 2 つが行われる。
