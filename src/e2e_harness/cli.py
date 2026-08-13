@@ -517,36 +517,48 @@ def cmd_init(config: Config, args: argparse.Namespace) -> int:
 
 
 def cmd_doctor(config: Config, args: argparse.Namespace) -> int:
-    del args
-    problems = 0
+    """前提条件を確認する。
 
-    def check(label: str, ok: bool, hint: str = "") -> None:
-        nonlocal problems
+    これは助言ツールであり、進行をブロックしない。すべてが ✓ になることを
+    目指す作りにもしていない。対象外のプラットフォームの項目や、
+    手動モードで代替できる項目まで失敗として数えると、正常な状態でも
+    永久に「問題あり」と出てしまうため。
+
+    終了コードは「必須」の失敗数だけで決める。
+    """
+    target = args.platform  # android / ios / both
+    required_failures = 0
+    optional_failures = 0
+
+    def check(
+        label: str, ok: bool, hint: str = "", *, required: bool = True
+    ) -> None:
+        nonlocal required_failures, optional_failures
         if ok:
             print(f"  ✓ {label}")
-        else:
-            problems += 1
+            return
+        if required:
+            required_failures += 1
             print(f"  ✗ {label}")
-            if hint:
-                print(f"      {hint}")
+        else:
+            optional_failures += 1
+            print(f"  △ {label}  (任意)")
+        if hint:
+            print(f"      {hint}")
 
-    print("前提条件の確認:\n")
+    def skip(label: str) -> None:
+        print(f"  - {label}  (対象外)")
+
+    check_android = target in ("android", "both")
+    check_ios = target in ("ios", "both")
+
+    print(f"前提条件の確認 (対象: {target})\n")
+
+    # --- 共通 ---
     check(
         f"アプリのソース: {config.app_lib_dir}",
         config.app_lib_dir.is_dir(),
         "e2e.config.yaml の app.root を確認してください。",
-    )
-    check(
-        f"Android ビルド成果物: {config.android_apk_path.name}",
-        config.android_apk_path.is_file(),
-        "flutter build apk --debug --target-platform android-arm64"
-        " --split-per-abi を実行してください。",
-    )
-    check(
-        f"iOS ビルド成果物: {config.ios_app_path.name}",
-        config.ios_app_path.is_dir(),
-        "flutter build ios --release を実行してください。"
-        " 実機では debug ビルドは Appium から起動できません。",
     )
     check(
         "Appium CLI",
@@ -554,71 +566,6 @@ def cmd_doctor(config: Config, args: argparse.Namespace) -> int:
         or (config.root / "node_modules/.bin/appium").exists(),
         "npm install で Appium を導入してください。",
     )
-    check(
-        "adb",
-        shutil.which("adb") is not None,
-        "Android SDK の platform-tools を PATH に追加してください。",
-    )
-    # --- Android 実機 ---
-    android_cfg = config.appium.get("android", {})
-    devices = _connected_android_devices()
-    android_udid = str(android_cfg.get("udid", ""))
-    check(
-        f"Android 実機の接続 ({android_udid or 'udid 未設定'})",
-        bool(devices) and (not android_udid or android_udid in devices),
-        (
-            "USB で接続し、端末側で USB デバッグを有効にしてください。"
-            " 初回は端末に出る認証ダイアログを許可する必要があります。"
-            if not devices
-            else f"接続中: {', '.join(devices)}。"
-            " e2e.config.yaml の appium.android.udid と一致しません。"
-        ),
-    )
-    if devices and not android_udid:
-        print(
-            f"      複数台つなぐ場合は udid を設定してください: {', '.join(devices)}"
-        )
-    # ビルドが入れ替わっていない事故を避けるため、投入済みかも見る。
-    if devices:
-        check(
-            f"アプリの投入 ({config.app.android_package})",
-            _is_app_installed(config.app.android_package),
-            "adb install -r <APK> でアプリを投入してください。"
-            " 既に入っている場合も、修正後は必ず入れ直すこと。",
-        )
-
-    # --- iOS 実機 ---
-    ios_cfg = config.appium.get("ios", {})
-    ios_udid = str(ios_cfg.get("udid", ""))
-    ios_output = _ios_devices_output()
-    check(
-        f"iOS 実機の接続 ({ios_udid or 'udid 未設定'})",
-        bool(ios_udid) and ios_udid in ios_output,
-        (
-            "`xcrun devicectl list devices` で UDID を確認し、"
-            " e2e.config.yaml の appium.ios.udid に設定してください。"
-            if not ios_udid
-            else "端末が見つかりません。USB 接続、ペアリング(このコンピュータを信頼)、"
-            "端末側の「デベロッパモード」が有効か確認してください。"
-        ),
-    )
-    check(
-        "iOS の署名設定 (xcode_org_id)",
-        bool(ios_cfg.get("xcode_org_id")),
-        "実機では WebDriverAgent の署名が必須です。Apple Developer の"
-        " Team ID を appium.ios.xcode_org_id に設定してください。"
-        " 未設定だと xcodebuild が exit code 65 で落ちます。",
-    )
-    # シミュレータ用ビルドは実機で動かない。パスの取り違えが起きやすい。
-    if "iphonesimulator" in str(config.build.ios_app):
-        problems += 1
-        print("  ✗ iOS ビルド成果物がシミュレータ用のパスを指しています")
-        print(
-            "      build.ios_app を build/ios/iphoneos/Runner.app に変更し、"
-            "`flutter build ios --release` で実機用にビルドしてください。"
-        )
-    # バイナリの有無だけでなく、サーバが応答するかまで見る。
-    # execute 工程はサーバが起動している前提で動くため。
     server_url = str(config.appium.get("server_url", ""))
     check(
         f"Appium サーバの応答 ({server_url})",
@@ -626,28 +573,119 @@ def cmd_doctor(config: Config, args: argparse.Namespace) -> int:
         "別のターミナルで `npx appium --port "
         f"{server_url.rsplit(':', 1)[-1]}` を起動してください。",
     )
-    check(
-        f"Copilot CLI ({config.copilot.command})",
-        copilot_mod.cli_available(config.copilot.command),
-        "見つからない場合は --mode manual で運用できます。",
-    )
+
+    # --- Android ---
+    if check_android:
+        check(
+            f"Android ビルド成果物: {config.android_apk_path.name}",
+            config.android_apk_path.is_file(),
+            "flutter build apk --debug --target-platform android-arm64"
+            " --split-per-abi を実行してください。",
+        )
+        check(
+            "adb",
+            shutil.which("adb") is not None,
+            "Android SDK の platform-tools を PATH に追加してください。",
+        )
+        devices = _connected_android_devices()
+        android_udid = str(config.appium.get("android", {}).get("udid", ""))
+        check(
+            f"Android 実機の接続 ({android_udid or 'udid 未設定'})",
+            bool(devices) and (not android_udid or android_udid in devices),
+            (
+                "USB で接続し、端末側で USB デバッグを有効にしてください。"
+                " 初回は端末に出る認証ダイアログを許可する必要があります。"
+                if not devices
+                else f"接続中: {', '.join(devices)}。"
+                " e2e.config.yaml の appium.android.udid と一致しません。"
+            ),
+        )
+        if devices and not android_udid:
+            print(
+                f"      複数台つなぐ場合は udid を設定してください:"
+                f" {', '.join(devices)}"
+            )
+        # ビルドが入れ替わっていない事故を避けるため、投入済みかも見る。
+        if devices:
+            check(
+                f"アプリの投入 ({config.app.android_package})",
+                _is_app_installed(config.app.android_package),
+                "adb install -r <APK> でアプリを投入してください。"
+                " 既に入っている場合も、修正後は必ず入れ直すこと。",
+            )
+    else:
+        skip("Android 関連")
+
+    # --- iOS ---
+    if check_ios:
+        # シミュレータ用ビルドは実機で動かない。パスの取り違えが起きやすい。
+        check(
+            f"iOS ビルド成果物: {config.ios_app_path.name}",
+            config.ios_app_path.is_dir()
+            and "iphonesimulator" not in str(config.build.ios_app),
+            "flutter build ios --release を実行してください。"
+            " 実機では debug ビルドは Appium から起動できません。"
+            " build.ios_app が iphonesimulator を指している場合は"
+            " build/ios/iphoneos/Runner.app に変更してください。",
+        )
+        ios_cfg = config.appium.get("ios", {})
+        ios_udid = str(ios_cfg.get("udid", ""))
+        check(
+            f"iOS 実機の接続 ({ios_udid or 'udid 未設定'})",
+            bool(ios_udid) and ios_udid in _ios_devices_output(),
+            (
+                "`xcrun devicectl list devices` で UDID を確認し、"
+                " e2e.config.yaml の appium.ios.udid に設定してください。"
+                if not ios_udid
+                else "端末が見つかりません。USB 接続、ペアリング"
+                "(このコンピュータを信頼)、端末側の「デベロッパモード」が"
+                "有効か確認してください。"
+            ),
+        )
+        check(
+            "iOS の署名設定 (xcode_org_id)",
+            bool(ios_cfg.get("xcode_org_id")),
+            "実機では WebDriverAgent の署名が必須です。Apple Developer の"
+            " Team ID を appium.ios.xcode_org_id に設定してください。"
+            " 未設定だと xcodebuild が exit code 65 で落ちます。",
+        )
+    else:
+        skip("iOS 関連")
+
+    # --- ハーネスの資産 ---
     check(
         "ロケータレジストリ",
         config.locators_path.is_file(),
         "最初の実行時に locator-curator が作成します。",
     )
+    # init はアプリのルートへ出力してハーネス配下の複製を消すため、
+    # 両方を見てどちらかにあれば良しとする。
+    agents_locations = [
+        config.app.root / ".github" / "agents",
+        config.root / ".github" / "agents",
+    ]
     check(
         "Copilot エージェント定義",
-        (config.root / ".github/agents").is_dir(),
-        "e2e sync-agents を実行してください。",
+        any(path.is_dir() for path in agents_locations),
+        "e2e sync-agents --output ../.github/agents を実行してください。",
+    )
+    # 手動モードが正式な運用のひとつなので、無くても失敗にはしない。
+    check(
+        f"Copilot CLI ({config.copilot.command})",
+        copilot_mod.cli_available(config.copilot.command),
+        "無い場合は手動モードで運用します(工程ごとにプロンプトを書き出し、"
+        "VS Code のチャットに貼って実行する)。",
+        required=False,
     )
 
     print()
-    if problems:
-        print(f"{problems} 件の問題があります。")
-        return 1
-    print("問題ありません。")
-    return 0
+    if required_failures:
+        print(f"必須の不足: {required_failures} 件 — 解消しないとテストを実行できません。")
+    else:
+        print("必須の項目はすべて満たしています。")
+    if optional_failures:
+        print(f"任意の不足: {optional_failures} 件 — 運用は可能です。")
+    return 1 if required_failures else 0
 
 
 # ----------------------------------------------------------------------
@@ -777,6 +815,13 @@ def build_parser() -> argparse.ArgumentParser:
     init_p.set_defaults(func=cmd_init)
 
     doctor_p = sub.add_parser("doctor", help="前提条件を確認する")
+    doctor_p.add_argument(
+        "--platform",
+        choices=(*PLATFORMS, "both"),
+        default="both",
+        help="確認するプラットフォーム(既定: both)。"
+        "片方だけ試す日は絞ると対象外の項目が判定から外れる。",
+    )
     doctor_p.set_defaults(func=cmd_doctor)
 
     return parser
