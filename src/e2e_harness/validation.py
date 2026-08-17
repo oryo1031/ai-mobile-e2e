@@ -57,23 +57,19 @@ def validate_schema(document: Path, schema_path: Path) -> ValidationResult:
     return ValidationResult(ok=not errors, errors=errors)
 
 
-def validate_no_open_questions(spec_path: Path) -> ValidationResult:
-    """仕様に未解決の疑問が残っていないか。
+def collect_open_questions(spec_path: Path) -> list[str]:
+    """仕様に残った未解決の疑問を集める。
 
     spec-analyst は設計書から読み取れない点を推測で埋めず open_questions に
-    列挙する。ここが空でない限り、人が設計書を補うまで先に進ませない。
+    列挙する。ただしこれは**工程を止めない**。設計書に情報が無いことは
+    AI の再実行では解消せず、止めると自動化の意味が薄れるため。
+
+    代わりに、この一覧は工程 3(試験項目の人によるレビュー)で提示される。
+    人はそこで、疑わしい試験項目を重点的に見ればよい。
     """
     data = _load_structured(spec_path)
     questions = (data or {}).get("open_questions") or []
-    if not questions:
-        return ValidationResult(ok=True)
-    return ValidationResult(
-        ok=False,
-        errors=[
-            "設計書に曖昧な点が残っています。設計書を補ってから再実行してください:",
-            *[f"  - {q}" for q in questions],
-        ],
-    )
+    return [str(q) for q in questions]
 
 
 class _PageUsageVisitor(ast.NodeVisitor):

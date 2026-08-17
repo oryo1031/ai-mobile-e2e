@@ -60,6 +60,11 @@
           "expected_result": {
             "type": "string",
             "description": "この試験項目全体としての期待結果"
+          },
+          "assumptions": {
+            "type": "array",
+            "description": "設計書に書かれておらず、仮定を置いた点。人のレビューで重点的に確認される。",
+            "items": { "type": "string" }
           }
         }
       }

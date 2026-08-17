@@ -244,10 +244,15 @@ class Runner:
             stage_state.status = StageStatus.AWAITING_REVIEW
             stage_state.started_at = stage_state.started_at or state_mod.now()
             self.save()
+            notes = (
+                stage.build_notes(self.context)
+                if stage.build_notes is not None
+                else stage.notes
+            )
             return StageOutcome(
                 stage=stage.name,
                 status=StageStatus.AWAITING_REVIEW,
-                message=stage.notes,
+                message=notes,
             )
 
         stage_state.status = StageStatus.RUNNING

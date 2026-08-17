@@ -14,15 +14,17 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
+
 from .config import Config
 from .registry import diff as registry_diff
 from .registry import load as load_registry
 from .semantics import scan_directory
 from .validation import (
     ValidationResult,
+    collect_open_questions,
     run_pytest_collect,
     run_ruff,
-    validate_no_open_questions,
     validate_schema,
     validate_test_code,
 )
@@ -85,6 +87,8 @@ class Stage:
     prompt_name: str | None = None
     #: 人の判断で止まる工程。
     human_review: bool = False
+    #: 人に見せる案内を実行時に組み立てる。notes より優先する。
+    build_notes: Callable[[StageContext], str] | None = None
     #: AI に渡すタスクプロンプトを組み立てる。
     build_prompt: Callable[[StageContext], str] | None = None
     #: 出口の検証ゲート。
@@ -166,10 +170,70 @@ def _analysis_prompt(ctx: StageContext) -> str:
 # 検証ゲート
 # ----------------------------------------------------------------------
 def _gate_spec(ctx: StageContext) -> ValidationResult:
+    """仕様の正規化の出口。
+
+    open_questions は**止めない**。設計書に情報が無いことは AI の再実行では
+    解消せず、ここで止めると人が設計書を直すまで自動化が進まなくなるため。
+    警告として出したうえで先へ進め、工程 3 の人のレビューで拾う。
+    """
     result = validate_schema(ctx.spec_path, ctx.config.root / "schemas/spec.schema.json")
     if not result.ok:
         return result
-    return result.merge(validate_no_open_questions(ctx.spec_path))
+    questions = collect_open_questions(ctx.spec_path)
+    if questions:
+        result.warnings.append(
+            f"設計書から読み取れなかった点が {len(questions)} 件あります。"
+            "以降の工程は仮定を置いて進むため、試験項目のレビューで確認してください。"
+        )
+        result.warnings.extend(f"  - {q}" for q in questions)
+    return result
+
+
+def _review_notes(ctx: StageContext) -> str:
+    """試験項目レビューの案内。
+
+    設計書から読み取れなかった点と、それに対して AI が置いた仮定を並べる。
+    どこを重点的に見ればよいかが分からないとレビューが形骸化するため、
+    ここで「疑わしい箇所」を名指しする。
+    """
+    lines = [
+        "試験項目を読み、観点の抜けや期待結果の誤りが無いか確認してください。",
+    ]
+
+    questions = collect_open_questions(ctx.spec_path)
+    if questions:
+        lines.append("")
+        lines.append(
+            f"設計書から読み取れなかった点が {len(questions)} 件あります。"
+            "これらは仮定を置いて進めています:"
+        )
+        lines.extend(f"  - {q}" for q in questions)
+
+    assumptions = _collect_assumptions(ctx.testcases_path)
+    if assumptions:
+        lines.append("")
+        lines.append("AI が仮定を置いた試験項目(重点的に確認してください):")
+        lines.extend(f"  - {a}" for a in assumptions)
+
+    lines.append("")
+    lines.append(f"試験項目: {ctx.relative(ctx.testcases_path)}")
+    lines.append("問題なければ `e2e approve review` で次へ進みます。")
+    return "\n    ".join(lines)
+
+
+def _collect_assumptions(testcases_path: Path) -> list[str]:
+    """試験項目に記録された仮定を集める。"""
+    if not testcases_path.is_file():
+        return []
+    try:
+        data = yaml.safe_load(testcases_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return []
+    found: list[str] = []
+    for case in (data or {}).get("testcases", []):
+        for assumption in case.get("assumptions") or []:
+            found.append(f"{case.get('id', '?')}: {assumption}")
+    return found
 
 
 def _gate_testcases(ctx: StageContext) -> ValidationResult:
@@ -304,10 +368,7 @@ STAGES: list[Stage] = [
         name="review",
         title="試験項目の人によるレビュー",
         human_review=True,
-        notes=(
-            "試験項目を読み、観点の抜けや期待結果の誤りが無いか確認してください。"
-            "問題なければ `e2e approve review` で次へ進みます。"
-        ),
+        build_notes=_review_notes,
     ),
     Stage(
         name="locators",
