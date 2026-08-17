@@ -1,7 +1,6 @@
 ---
 name: e2e-orchestrator
 description: E2E テスト自動化ワークフロー全体の進行を管理する
-tools: ['search/codebase', 'edit/editFiles', 'read', 'runCommands', 'agent']
 agents: ['e2e-spec-analyst', 'e2e-testcase-designer', 'e2e-locator-curator', 'e2e-test-codegen', 'e2e-run-analyst']
 handoffs:
   - label: 1. 仕様を正規化する

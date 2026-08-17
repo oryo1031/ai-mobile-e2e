@@ -1,7 +1,6 @@
 ---
 name: e2e-testcase-designer
 description: 正規化仕様から試験項目 YAML を設計する(人のレビュー対象)
-tools: ['search/codebase', 'edit/editFiles', 'read']
 ---
 
 <!-- このファイルは自動生成されています。編集は prompts/testcase-designer.md に対して行い、`e2e sync-agents` を実行してください。 -->

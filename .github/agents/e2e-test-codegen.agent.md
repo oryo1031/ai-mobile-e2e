@@ -1,7 +1,6 @@
 ---
 name: e2e-test-codegen
 description: 試験項目から pytest のテストコードを生成する
-tools: ['search/codebase', 'edit/editFiles', 'read']
 ---
 
 <!-- このファイルは自動生成されています。編集は prompts/test-codegen.md に対して行い、`e2e sync-agents` を実行してください。 -->

@@ -1,7 +1,6 @@
 ---
 name: e2e-locator-curator
 description: ロケータレジストリを整備し、アプリ側への identifier 追加を提案する
-tools: ['search/codebase', 'edit/editFiles', 'read', 'runCommands']
 ---
 
 <!-- このファイルは自動生成されています。編集は prompts/locator-curator.md に対して行い、`e2e sync-agents` を実行してください。 -->

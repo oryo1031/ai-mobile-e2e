@@ -1,7 +1,6 @@
 ---
 name: e2e-run-analyst
 description: 実行結果と証跡から失敗を 4 分類して分析レポートを作る
-tools: ['search/codebase', 'edit/editFiles', 'read']
 ---
 
 <!-- このファイルは自動生成されています。編集は prompts/run-analyst.md に対して行い、`e2e sync-agents` を実行してください。 -->

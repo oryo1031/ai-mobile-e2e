@@ -1,7 +1,6 @@
 ---
 name: e2e-spec-analyst
 description: 設計書(Markdown)を正規化仕様 YAML に変換する
-tools: ['search/codebase', 'edit/editFiles', 'read']
 ---
 
 <!-- このファイルは自動生成されています。編集は prompts/spec-analyst.md に対して行い、`e2e sync-agents` を実行してください。 -->

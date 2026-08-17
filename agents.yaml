@@ -6,38 +6,47 @@
 #
 # プロンプト本体を単一ソースにしておくことで、VS Code のチャットから使う場合と
 # Copilot CLI から自動実行する場合で内容がずれないようにしている。
+#
+# --- tools を指定していない理由 ---
+#
+# tools を省略すると、そのエージェントは利用可能な全ツールを使える。
+# 逆に指定する場合、**認識できないツール名は黙って無視される**。名前を 1 つ
+# 間違えるだけで、ファイルを書けないエージェントができあがり、
+# 「新規ファイルを書き出す手段が与えられていない」と言って止まる。
+#
+# ツール名は VS Code のバージョンや Copilot CLI との間で異なり、追随が難しい。
+# 一方このハーネスの安全性は、ツールの制限ではなく**各工程の出口にある
+# 検証ゲート**で担保している(スキーマ検証・AST 検証・アプリソースとの突合)。
+# アプリのソースを書き換えないことなどは prompts/_common.md で指示している。
+#
+# したがって既定では tools を指定しない。絞りたい場合は各エージェントに
+# tools: [...] を足せるが、指定した名前が実在するか必ず確認すること。
 
 agents:
   - name: e2e-spec-analyst
     prompt: spec-analyst
     description: 設計書(Markdown)を正規化仕様 YAML に変換する
-    tools: ["search/codebase", "edit/editFiles", "read"]
 
   - name: e2e-testcase-designer
     prompt: testcase-designer
     description: 正規化仕様から試験項目 YAML を設計する(人のレビュー対象)
-    tools: ["search/codebase", "edit/editFiles", "read"]
 
   - name: e2e-locator-curator
     prompt: locator-curator
     description: ロケータレジストリを整備し、アプリ側への identifier 追加を提案する
-    tools: ["search/codebase", "edit/editFiles", "read", "runCommands"]
 
   - name: e2e-test-codegen
     prompt: test-codegen
     description: 試験項目から pytest のテストコードを生成する
-    tools: ["search/codebase", "edit/editFiles", "read"]
 
   - name: e2e-run-analyst
     prompt: run-analyst
     description: 実行結果と証跡から失敗を 4 分類して分析レポートを作る
-    tools: ["search/codebase", "edit/editFiles", "read"]
 
 orchestrator:
   name: e2e-orchestrator
   prompt: orchestrator
   description: E2E テスト自動化ワークフロー全体の進行を管理する
-  tools: ["search/codebase", "edit/editFiles", "read", "runCommands", "agent"]
   # 対話実行時の工程遷移。CLI から自動実行する場合は stages.py の定義が使われる。
   handoffs:
     - label: "1. 仕様を正規化する"
