@@ -9,6 +9,7 @@ Copilot には複数エージェントを制御する API が無いため、進�
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -116,9 +117,59 @@ class Runner:
         決定論的にこちらで行う。
         """
         if stage.name == "locators":
+            self._warn_if_app_dirty()
+            self._capture_analyze_baseline()
             self._write_scan_report()
         elif stage.name == "codegen":
             self._regenerate_pages()
+
+    def _warn_if_app_dirty(self) -> None:
+        """アプリ側に未コミットの変更があれば知らせる。
+
+        ロケータ整備は AI がアプリのソースを書き換える。自分の変更と
+        混ざると、あとで差分を読み分けられなくなるため先に伝える。
+        """
+        try:
+            proc = subprocess.run(  # noqa: S603
+                ["git", "-C", str(self.config.app.root), "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return
+        if proc.returncode != 0:
+            return
+        changed = [line for line in proc.stdout.splitlines() if line.strip()]
+        if changed:
+            self.reporter.warning(
+                f"アプリ側に未コミットの変更が {len(changed)} 件あります。"
+                "この工程はアプリのソースを編集するため、"
+                "先にコミットしておくと差分を読み分けやすくなります。"
+            )
+
+    def _capture_analyze_baseline(self) -> None:
+        """編集前のアプリの解析エラーを控えておく。
+
+        実アプリは元から flutter analyze を通っていないことがある。
+        絶対の合否で見るとこの工程が永久に進めなくなるため、
+        「この工程が増やしたエラー」だけを後で判定できるようにしておく。
+        """
+        from .stages import analyze_errors
+
+        errors = analyze_errors(self.config.app.root)
+        if errors is None:
+            return
+        self.context.run_dir.mkdir(parents=True, exist_ok=True)
+        self.context.analyze_baseline_path.write_text(
+            "\n".join(errors) + ("\n" if errors else ""), encoding="utf-8"
+        )
+        if errors:
+            self.reporter.info(
+                f"アプリには元から解析エラーが {len(errors)} 件あります"
+                "(基準として控えました)。"
+            )
 
     def _write_scan_report(self) -> None:
         usages = semantics.scan_directory(self.config.app_lib_dir)
@@ -375,6 +426,15 @@ class Runner:
 
             if outcome.status is StageStatus.COMPLETED:
                 self.reporter.success(f"{stage.title} が完了しました。")
+                if stage.name == "locators":
+                    # アプリのソースが変わっている可能性がある。
+                    self.reporter.info(
+                        "アプリのソースを変更した可能性があります。"
+                        "差分を確認してください:"
+                    )
+                    self.reporter.info(
+                        f"  git -C {self.config.app.root} diff --stat"
+                    )
                 continue
             if outcome.status is StageStatus.AWAITING_REVIEW:
                 self.reporter.warning("人の確認待ちで停止します。")

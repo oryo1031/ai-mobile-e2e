@@ -9,6 +9,7 @@ AI を使わない工程(テスト実行)もあり、その場合は execute が
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -69,6 +70,11 @@ class StageContext:
     @property
     def junit_path(self) -> Path:
         return self.run_dir / "junit.xml"
+
+    @property
+    def analyze_baseline_path(self) -> Path:
+        """ロケータ整備の前に取っておく flutter analyze の基準。"""
+        return self.run_dir / "flutter_analyze_baseline.txt"
 
     def relative(self, path: Path) -> str:
         try:
@@ -133,11 +139,12 @@ def _locators_prompt(ctx: StageContext) -> str:
         f"- アプリ走査結果: {ctx.relative(ctx.scan_report_path)}\n"
         f"- 更新対象: {ctx.relative(ctx.config.locators_path)}\n"
         f"- スキーマ: schemas/locators.schema.json\n"
-        f"- アプリ側への追加提案の出力先: "
-        f"{ctx.relative(ctx.locator_proposal_path)}\n\n"
-        "走査結果に実在が確認できた identifier だけを登録してください。"
-        "足りない要素はレジストリに書かず、提案ファイルに"
-        "Semantics(container: true, identifier: ...) の形で書いてください。"
+        f"- アプリのソース(編集可): {ctx.config.app_lib_dir}\n"
+        f"- 変更記録の出力先: {ctx.relative(ctx.locator_proposal_path)}\n\n"
+        "アプリに identifier が足りない場合は、"
+        "Semantics(container: true, identifier: ...) でラップして追加してください。"
+        "追加してよいのはこのラップだけで、既存のロジックや整形には触れないこと。"
+        "レジストリには、走査で実在が確認できた identifier だけを登録してください。"
     )
 
 
@@ -257,7 +264,15 @@ def _gate_locators(ctx: StageContext) -> ValidationResult:
     registry = load_registry(ctx.config.locators_path)
     if not registry.screens:
         return ValidationResult(
-            ok=False, errors=["ロケータレジストリが空です。"]
+            ok=False,
+            errors=[
+                "ロケータレジストリが空です。試験項目が参照する要素を"
+                " アプリに追加して登録する必要があります。",
+                f"  アプリ走査結果: {ctx.relative(ctx.scan_report_path)}",
+                f"  変更記録:       {ctx.relative(ctx.locator_proposal_path)}",
+                "  アプリに Semantics(container: true, identifier: ...) が"
+                " 1 つも無い場合、この工程で追加します。",
+            ],
         )
 
     usages = scan_directory(ctx.config.app_lib_dir)
@@ -278,7 +293,90 @@ def _gate_locators(ctx: StageContext) -> ValidationResult:
         warnings.append(
             f"アプリの identifier '{identifier}' はレジストリに未登録です。"
         )
-    return ValidationResult(ok=not errors, errors=errors, warnings=warnings)
+    if errors:
+        return ValidationResult(ok=False, errors=errors, warnings=warnings)
+
+    # この工程はアプリのソースを書き換える。壊していないことを確認する。
+    return ValidationResult(ok=True, warnings=warnings).merge(
+        _run_flutter_analyze(ctx)
+    )
+
+
+def analyze_errors(app_root: Path) -> list[str] | None:
+    """flutter analyze のエラー行を集める。
+
+    実行できなかった場合は None を返す(flutter が無い環境など)。
+    """
+    if shutil.which("flutter") is None:
+        return None
+    try:
+        proc = subprocess.run(  # noqa: S603
+            ["flutter", "analyze", "--no-pub"],
+            cwd=app_root,
+            capture_output=True,
+            text=True,
+            timeout=600,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    # 「error • ...」の行だけを見る。info や warning は元から出ていることが多い。
+    return sorted(
+        line.strip()
+        for line in (proc.stdout or "").splitlines()
+        if line.strip().startswith("error •")
+    )
+
+
+def _run_flutter_analyze(ctx: StageContext) -> ValidationResult:
+    """アプリのソースを壊していないか確認する。
+
+    ロケータ整備は AI がアプリのソースを編集する唯一の工程なので、
+    構文や型を壊していないことをここで機械的に確かめる。
+
+    ただし**実アプリは元から analyze を通っていないことがある**ため、
+    絶対の合否では見ない。工程の開始前に取っておいた基準と突き合わせ、
+    **新たに増えたエラーだけ**を落とす。そうしないと、無関係な既存の
+    エラーでこの工程が永久に進めなくなる。
+    """
+    current = analyze_errors(ctx.config.app.root)
+    if current is None:
+        return ValidationResult(
+            ok=True,
+            warnings=[
+                "flutter が見つからないため、アプリの静的解析を省略しました。"
+                " アプリ側の差分を目視で確認してください。"
+            ],
+        )
+
+    baseline: list[str] = []
+    if ctx.analyze_baseline_path.is_file():
+        baseline = [
+            line
+            for line in ctx.analyze_baseline_path.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ]
+
+    introduced = [line for line in current if line not in baseline]
+    if not introduced:
+        warnings = []
+        if baseline:
+            warnings.append(
+                f"アプリには元から {len(baseline)} 件の解析エラーがあります"
+                "(この工程が増やしたものではありません)。"
+            )
+        return ValidationResult(ok=True, warnings=warnings)
+
+    return ValidationResult(
+        ok=False,
+        errors=[
+            f"アプリのソースに解析エラーが {len(introduced)} 件増えました。"
+            " 追加した Semantics が構文を壊していないか確認してください。",
+            *introduced[:20],
+        ],
+    )
 
 
 def _gate_codegen(ctx: StageContext) -> ValidationResult:
