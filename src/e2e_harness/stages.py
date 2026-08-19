@@ -27,6 +27,7 @@ from .validation import (
     run_pytest_collect,
     run_ruff,
     validate_schema,
+    validate_setup_coverage,
     validate_test_code,
 )
 
@@ -384,6 +385,13 @@ def _gate_codegen(ctx: StageContext) -> ValidationResult:
 
     registry = load_registry(ctx.config.locators_path)
     result = validate_test_code(ctx.config.generated_tests_dir, public_api(registry))
+    if not result.ok:
+        return result
+    # 前提条件のセットアップが無いと、テストはその画面へ到達できないまま
+    # 実行され、一番遅い段階で失敗する。ここで落とす。
+    result = result.merge(
+        validate_setup_coverage(ctx.testcases_path, ctx.config.setup_dir)
+    )
     if not result.ok:
         return result
     result = result.merge(run_ruff(ctx.config.root, ctx.config.generated_tests_dir))

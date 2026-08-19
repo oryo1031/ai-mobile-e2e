@@ -1,0 +1,31 @@
+"""前提条件のセットアップ。
+
+試験項目の `preconditions` に書かれた状態を、テスト本体が始まる前に
+作るための処理を置く。ログイン、規約同意、ディープリンク起動など。
+
+**identifier を付けただけではテストは動かない。** identifier は画面上の
+要素を見つけるためのもので、その画面に到達する手段は別に要る。ここがその手段。
+
+## 規約
+
+`preconditions[].id` が `logged_in` なら、`tests/setup/logged_in.py` に
+次の形の関数を置く。名前は `setup_<id>` で固定する。検証ゲートがこの名前で
+実装の有無を確認するため、変えると実装漏れとして落ちる。
+
+```python
+def setup_logged_in(driver, platform, *, email: str, password: str) -> None:
+    login = LoginPage(driver, platform)
+    login.input_email_field(email)
+    login.input_password_field(password)
+    login.tap_submit_button()
+```
+
+- 第 1・第 2 引数は `driver` と `platform` に固定する
+- `preconditions[].params` の値はキーワード引数で受ける
+- **要素の操作は Page Object 経由で行う。** ロケータ文字列を直接書かない
+- 同じ前提を機能ごとに作り直さない。既にあるものは再利用する
+
+ここに置いた関数は、このパッケージから import できるようにしておくこと。
+"""
+
+__all__: list[str] = []

@@ -60,5 +60,61 @@ def test_tc_login_001(driver, platform):
   試験項目に紐付けるためにこの形式が必要。
 - 試験項目の `steps` を上から順にコードへ落とす。
   `action: verify` は `assert` にする。
-- `preconditions` はコード化できるものだけ実装し、できないものは
-  コメントとして残す。
+- **`preconditions` は必ず実装する。** コメントで済ませてはならない。
+  詳しくは下の「前提条件のセットアップ」を参照。
+
+## 前提条件のセットアップ
+
+試験項目の `preconditions` は、テスト本体が始まる前にアプリを所定の状態へ
+持っていくための指定。**identifier が付いていても、その画面に到達する手段が
+無ければテストは動かない。** ここを実装しないと、実行時に「ログイン画面から
+進めない」といった形で必ず失敗する。
+
+### 使い方
+
+`preconditions[].id` に対応する `setup_<id>` を `tests/setup/` から import し、
+テスト関数の冒頭で呼ぶ。`params` はキーワード引数として渡す。
+
+```python
+from tests.pages import HomePage
+from tests.setup import setup_logged_in, setup_terms_accepted
+
+
+@pytest.mark.e2e
+def test_tc_deeplink_001(driver, platform):
+    """TC_DEEPLINK_001: QR のディープリンクから対象画面が開く"""
+    setup_logged_in(driver, platform, email="user@example.com", password="pass")
+    setup_terms_accepted(driver, platform)
+
+    home = HomePage(driver, platform)
+    home.open_deeplink("myapp://campaign/12345")
+    ...
+```
+
+### 未実装のセットアップは自分で書く
+
+`tests/setup/` に無い `id` があれば、**あなたが実装する**。
+`tests/setup/<id>.py` に次の形で書き、`tests/setup/__init__.py` から
+import できるようにする。
+
+```python
+def setup_logged_in(driver, platform, *, email: str, password: str) -> None:
+    login = LoginPage(driver, platform)
+    login.input_email_field(email)
+    login.input_password_field(password)
+    login.tap_submit_button()
+```
+
+- 第 1・第 2 引数は `driver` と `platform` に固定する
+- **要素の操作は Page Object 経由**。ロケータ文字列を直接書かない
+- **既にあるセットアップは再実装しない。** 同じ `logged_in` を機能ごとに
+  作り直すと、アプリが変わったときに直す箇所が増える
+
+### ディープリンクと QR
+
+ディープリンクは `BasePage.open_deeplink(url)` を使う。Page Object の
+どのクラスからでも呼べる。
+
+**QR コードの読み取りそのものは自動化しない。** QR が指す URL を
+`open_deeplink()` に渡して代替する。カメラでの読み取りは Appium の
+守備範囲外で、試験項目の意図(遷移先が正しいか)はこれで満たせる。

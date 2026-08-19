@@ -3,17 +3,30 @@
   "title": "試験項目",
   "description": "testcase-designer が仕様から起こした試験項目。人のレビュー対象であり、テストコード生成の入力になる。",
   "type": "object",
-  "required": ["feature", "testcases"],
+  "required": [
+    "feature",
+    "testcases"
+  ],
   "additionalProperties": false,
   "properties": {
-    "feature": { "type": "string" },
-    "source_spec": { "type": "string" },
+    "feature": {
+      "type": "string"
+    },
+    "source_spec": {
+      "type": "string"
+    },
     "testcases": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "title", "category", "priority", "steps"],
+        "required": [
+          "id",
+          "title",
+          "category",
+          "priority",
+          "steps"
+        ],
         "additionalProperties": false,
         "properties": {
           "id": {
@@ -21,39 +34,90 @@
             "pattern": "^TC_[A-Z0-9_]+$",
             "description": "試験項目 ID。証跡ファイル名と紐付く。"
           },
-          "title": { "type": "string" },
+          "title": {
+            "type": "string"
+          },
           "category": {
             "type": "string",
-            "enum": ["normal", "abnormal", "boundary"],
+            "enum": [
+              "normal",
+              "abnormal",
+              "boundary"
+            ],
             "description": "正常系 / 異常系 / 境界値"
           },
           "priority": {
             "type": "string",
-            "enum": ["high", "medium", "low"]
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
           },
           "preconditions": {
             "type": "array",
-            "items": { "type": "string" }
+            "description": "この試験項目を実行する前に満たすべき状態。id ごとに tests/setup/setup_<id> が必要になる。",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "description"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$",
+                  "description": "セットアップの識別子。同じ前提には同じ id を使い回す。"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "params": {
+                  "type": "object",
+                  "description": "セットアップに渡す値。設計書に書かれた認証情報など。",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
           },
           "steps": {
             "type": "array",
             "minItems": 1,
             "items": {
               "type": "object",
-              "required": ["action", "target"],
+              "required": [
+                "action",
+                "target"
+              ],
               "additionalProperties": false,
               "properties": {
                 "action": {
                   "type": "string",
-                  "enum": ["tap", "input", "toggle", "scroll", "verify", "wait"]
+                  "enum": [
+                    "tap",
+                    "input",
+                    "toggle",
+                    "scroll",
+                    "verify",
+                    "wait"
+                  ]
                 },
                 "target": {
                   "type": "string",
                   "description": "ロケータ registry の id を参照する"
                 },
-                "value": { "type": "string" },
-                "expected": { "type": "string" },
-                "note": { "type": "string" }
+                "value": {
+                  "type": "string"
+                },
+                "expected": {
+                  "type": "string"
+                },
+                "note": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -64,7 +128,9 @@
           "assumptions": {
             "type": "array",
             "description": "設計書に書かれておらず、仮定を置いた点。人のレビューで重点的に確認される。",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

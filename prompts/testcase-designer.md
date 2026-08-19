@@ -47,7 +47,8 @@ testcases:
     category: normal
     priority: high
     preconditions:
-      - 未ログイン状態でアプリを起動している
+      - id: logged_out
+        description: 未ログイン状態でアプリを起動している
     steps:
       - action: input
         target: email_field
@@ -85,3 +86,30 @@ testcases:
 - 実行できない項目(手動確認が前提のもの、外部システムの状態に依存するもの)は
   無理に含めない。自動化に向かないと判断した観点は `note` に理由を書いて残す。
 - 優先度は正直に付ける。すべて high にしない。
+
+## 前提条件の書き方
+
+`preconditions` は**実装される**。散文ではなく、ID を持つ形で書く。
+ここに書いた ID ごとに `tests/setup/setup_<id>` が実装され、
+実装が無ければ検証ゲートで落ちる。
+
+```yaml
+preconditions:
+  - id: logged_in
+    description: 一般ユーザーでログイン済みであること
+    params:
+      email: "user@example.com"
+      password: "correct-password"
+  - id: terms_accepted
+    description: 利用規約に同意済みであること
+```
+
+- **同じ前提には同じ ID を使い回す。** `logged_in` を機能ごとに
+  `login_done` `already_logged_in` などと作り分けない。ID が分かれると
+  同じ処理が重複して実装され、アプリが変わったときに直す箇所が増える
+- 設計書に書かれた認証情報などの値は `params` に入れる。
+  セットアップにキーワード引数として渡される
+- **状態を作る必要があるものだけを書く。** 「アプリがインストールされている」
+  のような、テスト実行の前提として当然のものは書かない
+- ディープリンクからの起動は前提条件ではなく `steps` 側で扱う
+  (`open_deeplink` で開く操作そのものが試験の対象になるため)

@@ -72,6 +72,11 @@ class Config:
         return self.root / self.paths["generated_pages"]
 
     @property
+    def setup_dir(self) -> Path:
+        """前提条件のセットアップ置き場。"""
+        return self.root / self.paths.get("setup", "tests/setup")
+
+    @property
     def app_lib_dir(self) -> Path:
         return self.app.root / self.app.lib_dir
 
@@ -164,6 +169,7 @@ paths:
   locators: "locators/registry.yaml"
   generated_tests: "tests/e2e"
   generated_pages: "tests/pages"
+  setup: "tests/setup"
 """
 
 

@@ -182,3 +182,61 @@ def run_pytest_collect(root: Path, target: Path) -> ValidationResult:
     return ValidationResult(
         ok=False, errors=[proc.stdout.strip() or proc.stderr.strip()]
     )
+
+
+def validate_setup_coverage(
+    testcases_path: Path, setup_dir: Path
+) -> ValidationResult:
+    """前提条件のセットアップが実装されているか確認する。
+
+    試験項目の `preconditions[].id` それぞれに対し、`tests/setup/` に
+    `setup_<id>` が実装されている必要がある。
+
+    これが無いと、テストは「その画面にたどり着けない」まま実行され、
+    **一番遅い実行時に初めて破綻する**。identifier があっても画面に
+    到達する手段は別に要るため、ここで実行前に落とす。
+    """
+    if not testcases_path.is_file():
+        return ValidationResult(ok=False, errors=[f"試験項目がありません: {testcases_path}"])
+
+    try:
+        data = yaml.safe_load(testcases_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        return ValidationResult(ok=False, errors=[f"試験項目が壊れています: {exc}"])
+
+    # 参照されている前提条件 ID を集める。
+    required: dict[str, str] = {}
+    for case in (data or {}).get("testcases", []):
+        for pre in case.get("preconditions") or []:
+            if isinstance(pre, dict) and pre.get("id"):
+                required[str(pre["id"])] = str(pre.get("description", ""))
+
+    if not required:
+        return ValidationResult(ok=True)
+
+    # 実装されている setup_<id> を集める。
+    implemented: set[str] = set()
+    if setup_dir.is_dir():
+        for file in setup_dir.rglob("*.py"):
+            try:
+                tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name.startswith("setup_"):
+                    implemented.add(node.name[len("setup_") :])
+
+    missing = sorted(set(required) - implemented)
+    if not missing:
+        return ValidationResult(ok=True)
+
+    errors = [
+        f"前提条件のセットアップが {len(missing)} 件ありません。"
+        " テストがその画面にたどり着けず、実行時に失敗します。"
+    ]
+    for identifier in missing:
+        errors.append(
+            f"  - '{identifier}' ({required[identifier]}):"
+            f" {setup_dir.name}/ に setup_{identifier} が必要です"
+        )
+    return ValidationResult(ok=False, errors=errors)

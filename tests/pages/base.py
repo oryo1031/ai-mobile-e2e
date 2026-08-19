@@ -143,3 +143,18 @@ class BasePage:
 
     def wait_for(self, identifier: str, *, timeout: int = DEFAULT_TIMEOUT) -> Any:
         return self.find(identifier, timeout=timeout)
+
+    # ------------------------------------------------------------------
+    # 端末の機能
+    # ------------------------------------------------------------------
+    def open_deeplink(self, url: str) -> None:
+        """ディープリンクでアプリを開く。
+
+        画面操作ではなく端末の機能なので、Page Object の生成対象ではなく
+        ここに置く。`driver.get()` は UiAutomator2 / XCUITest の
+        どちらでもディープリンクを開ける。
+
+        QR コードから起動する試験項目などは、QR の読み取りそのものを
+        自動化するのではなく、QR が指す URL をここへ渡して代替する。
+        """
+        self.driver.get(url)

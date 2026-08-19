@@ -77,3 +77,4 @@ paths:
   locators: "locators/registry.yaml"
   generated_tests: "tests/e2e"
   generated_pages: "tests/pages"
+  setup: "tests/setup"

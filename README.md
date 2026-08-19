@@ -61,6 +61,43 @@ tests/e2e/*.py           ← AI 生成テスト
 
 **証跡取得も AI に書かせない。** `tests/conftest.py` の pytest フックが自動で取得する。
 
+## 前提条件のセットアップ
+
+**identifier を付けただけではテストは動かない。** identifier は画面上の要素を
+見つけるためのもので、**その画面に到達する手段は別に要る**。ログイン、規約同意、
+ディープリンク起動などがこれにあたる。
+
+試験項目の `preconditions` は ID を持ち、ID ごとに `tests/setup/setup_<id>` が
+実装される。実装は AI が行い、**実装漏れは実行前のゲートで落ちる**。
+
+```yaml
+preconditions:
+  - id: logged_in
+    description: 一般ユーザーでログイン済みであること
+    params:
+      email: "user@example.com"
+      password: "correct-password"
+```
+
+```
+✗ テストコードの生成 の検証ゲートが落ちました:
+  - 前提条件のセットアップが 2 件ありません。テストがその画面にたどり着けず、実行時に失敗します。
+      - 'logged_in' (一般ユーザーでログイン済みであること): setup/ に setup_logged_in が必要です
+```
+
+セットアップは `tests/setup/` に蓄積され、複数の試験項目・複数の機能から
+使い回される。同じ `logged_in` を機能ごとに作り直さないよう、
+試験項目の工程で ID を揃えさせている。
+
+### ディープリンクと QR
+
+ディープリンクは `BasePage.open_deeplink(url)` で開く。端末の機能なので
+Page Object の生成対象ではなく、harness が持っている。
+
+**QR コードの読み取りそのものは自動化しない。** QR が指す URL を
+`open_deeplink()` に渡して代替する。カメラでの読み取りは Appium の守備範囲外で、
+試験項目の意図(遷移先が正しいか)はこれで満たせる。
+
 ## 配置と初期設定
 
 **アプリのリポジトリに含めて配る。** ハーネス一式をアプリリポジトリの一部として
@@ -707,6 +744,7 @@ iOS 実機は 1 画面・1 要素で `e2e scan-app` と単純なタップまで�
 ├── tests/
 │   ├── conftest.py          # 証跡の自動取得
 │   ├── pages/               # base.py 以外は生成物
+│   ├── setup/               # 前提条件のセットアップ(AI 生成)
 │   └── e2e/                 # AI 生成テスト
 └── artifacts/<run-id>/      # 成果物・証跡・状態 (git 管理外)
 ```
