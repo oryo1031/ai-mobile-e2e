@@ -13,9 +13,9 @@
 実装の有無を確認するため、変えると実装漏れとして落ちる。
 
 ```python
-def setup_logged_in(driver, platform, *, email: str, password: str) -> None:
+def setup_logged_in(driver, platform, *, login_id: str, password: str) -> None:
     login = LoginPage(driver, platform)
-    login.input_email_field(email)
+    login.input_login_id_field(login_id)
     login.input_password_field(password)
     login.tap_submit_button()
 ```

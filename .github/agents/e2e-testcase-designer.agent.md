@@ -58,7 +58,7 @@ testcases:
         description: 未ログイン状態でアプリを起動している
     steps:
       - action: input
-        target: email_field
+        target: login_id_field
         value: "user@example.com"
       - action: input
         target: password_field

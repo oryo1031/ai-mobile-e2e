@@ -36,7 +36,7 @@ from tests.pages import LoginPage, HomePage
 def test_tc_login_001(driver, platform):
     """TC_LOGIN_001: 正しいメールアドレスとパスワードでログインできる"""
     login = LoginPage(driver, platform)
-    login.input_email_field("user@example.com")
+    login.input_login_id_field("card001")
     login.input_password_field("correct-password")
     login.tap_submit_button()
 
@@ -106,9 +106,9 @@ def test_tc_deeplink_001(driver, platform):
 import できるようにする。
 
 ```python
-def setup_logged_in(driver, platform, *, email: str, password: str) -> None:
+def setup_logged_in(driver, platform, *, login_id: str, password: str) -> None:
     login = LoginPage(driver, platform)
-    login.input_email_field(email)
+    login.input_login_id_field(login_id)
     login.input_password_field(password)
     login.tap_submit_button()
 ```
@@ -122,6 +122,7 @@ def setup_logged_in(driver, platform, *, email: str, password: str) -> None:
 
 `preconditions[].params.account` にアカウントの id が入っている。
 `tests.accounts.account(id)` で属性を取り出し、展開して渡す。
+**キーワード引数の名前は `attributes` のキーと一致させる**(`login_id` / `password` など)。
 
 ```python
 setup_logged_in(driver, platform, **account("card_member"))

@@ -1,19 +1,20 @@
 # テストアカウントの単一ソース。
 #
-# 設計書に書かれたアカウントを spec-analyst が抽出してここへ蓄積する。
-# 試験項目とテストコードは id で参照し、認証情報を直接持たない。
+# ここに直接書く。試験項目とテストコードは id で参照し、認証情報を持たない。
 # パスワードが変わったときに直す場所をここ 1 か所にするため。
 #
-# 例:
-# accounts:
-#   - id: card_member
-#     description: カードを保有している会員
-#     attributes:
-#       email: "card@example.com"
-#       password: "..."
-#   - id: cardless_member
-#     description: カードを保有していない会員
-#     attributes:
-#       email: "cardless@example.com"
-#       password: "..."
-accounts: []
+# attributes のキー名は、セットアップ関数の引数名と一致させること。
+# setup_logged_in(driver, platform, *, login_id, password) なら下記のとおり。
+
+accounts:
+  - id: card_member
+    description: カードを保有している会員
+    attributes:
+      login_id: ""
+      password: ""
+
+  - id: cardless_member
+    description: カードを保有していない会員
+    attributes:
+      login_id: ""
+      password: ""

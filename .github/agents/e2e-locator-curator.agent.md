@@ -35,10 +35,10 @@ screens:
   - id: login
     name: ログイン画面
     elements:
-      - id: email_field
-        identifier: login_email_field
+      - id: login_id_field
+        identifier: login_id_field
         role: text_field
-        description: メールアドレス入力欄
+        description: ログイン ID 入力欄
         scrollable: true
         dynamic_index: false
 ```
@@ -85,7 +85,7 @@ identifier がネイティブ側に露出しない。実測で確認済みの挙
 
 - 走査結果に「container: true が無い」と指摘された**既存箇所も直す**。
   そのままではその identifier は露出しない
-- `identifier` の命名は `<画面>_<要素>_<役割>` を推奨(`login_email_field`)。
+- `identifier` の命名は `<画面>_<要素>_<役割>` を推奨(`login_id_field`)。
   画面をまたいで衝突しないようにする。
 - リストのように連番が入る要素は `dynamic_index: true` にする。
   アプリ側は `identifier: 'item_$index'` のような補間で書かれている。

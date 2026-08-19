@@ -75,8 +75,7 @@ preconditions:
   - id: logged_in
     description: 一般ユーザーでログイン済みであること
     params:
-      email: "user@example.com"
-      password: "correct-password"
+      account: card_member
 ```
 
 ```
@@ -106,21 +105,21 @@ preconditions:
 setup_logged_in(driver, platform, **account("card_member"))
 ```
 
-値は `testdata/accounts.yaml` の 1 か所にある。設計書に書かれたアカウントを
-spec-analyst が抽出し、**既存の定義を上書きせずに蓄積する**(別の機能の
-設計書が同じアカウントを違う値で書いていても壊さないため)。
+値は `testdata/accounts.yaml` の 1 か所にある。**ここに直接書く。**
+設計書にアカウントが書かれている場合は spec-analyst が抽出して
+**既存の定義を上書きせずに蓄積する**ので、手で書いた値が潰されることはない。
 
 ```yaml
 accounts:
   - id: card_member
     description: カードを保有している会員
     attributes:
-      email: "card@example.com"
+      login_id: "..."
       password: "..."
   - id: cardless_member
     description: カードを保有していない会員
     attributes:
-      email: "cardless@example.com"
+      login_id: "..."
       password: "..."
 ```
 
@@ -453,7 +452,7 @@ uv run e2e inspect --platform ios
 
 ```
 画面に出ている identifier (resource-id):
-  ✓ login_email_field
+  ✓ login_id_field
   ✓ login_submit_button
   ✓ login_title
 ```

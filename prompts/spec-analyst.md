@@ -39,9 +39,9 @@ screens:
   - id: login
     name: ログイン画面
     elements:
-      - id: email_field
+      - id: login_id_field
         role: text_field
-        description: メールアドレス入力欄
+        description: ログイン ID 入力欄
 flows:
   - id: login_success
     name: 正しい認証情報でログインする
@@ -49,7 +49,7 @@ flows:
       - 未ログイン状態であること
     steps:
       - action: input
-        target: email_field
+        target: login_id_field
         value: "user@example.com"
       - action: tap
         target: submit_button
@@ -79,6 +79,7 @@ open_questions: []
 ## テストアカウントの抽出
 
 設計書にテスト用のアカウントが書かれていれば `accounts` に抽出する。
+**書かれていないことの方が多い。その場合は空でよい**(運用では `testdata/accounts.yaml` に直接書かれる)。
 **会員種別など属性が異なるものは、別のアカウントとして分ける。**
 
 ```yaml
@@ -86,12 +87,12 @@ accounts:
   - id: card_member
     description: カードを保有している会員
     attributes:
-      email: "card@example.com"
+      login_id: "..."
       password: "..."
   - id: cardless_member
     description: カードを保有していない会員
     attributes:
-      email: "cardless@example.com"
+      login_id: "..."
       password: "..."
 ```
 
