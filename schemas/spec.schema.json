@@ -112,8 +112,7 @@
             "items": {
               "type": "object",
               "required": [
-                "action",
-                "target"
+                "action"
               ],
               "additionalProperties": false,
               "properties": {
@@ -125,7 +124,8 @@
                     "toggle",
                     "scroll",
                     "verify",
-                    "wait"
+                    "wait",
+                    "open_deeplink"
                   ]
                 },
                 "target": {
@@ -133,12 +133,37 @@
                   "description": "screens[].elements[].id を参照する"
                 },
                 "value": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "入力する文字列。action が open_deeplink のときは開く URL。"
                 },
                 "expected": {
                   "type": "string"
                 }
-              }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "action": {
+                        "const": "open_deeplink"
+                      }
+                    },
+                    "required": [
+                      "action"
+                    ]
+                  },
+                  "then": {
+                    "required": [
+                      "value"
+                    ]
+                  },
+                  "else": {
+                    "required": [
+                      "target"
+                    ]
+                  }
+                }
+              ]
             }
           }
         }

@@ -138,6 +138,24 @@ Page Object の生成対象ではなく、harness が持っている。
 `open_deeplink()` に渡して代替する。カメラでの読み取りは Appium の守備範囲外で、
 試験項目の意図(遷移先が正しいか)はこれで満たせる。
 
+URL は**設計書から運ばれる**。試験項目に `action: open_deeplink` のステップ
+として載り、そこから `open_deeplink(value)` になる。手で追記する場所は
+用意していない(値が二重管理になるため)。
+
+```yaml
+steps:
+  - action: open_deeplink
+    value: "myapp://campaign/12345"
+  - action: verify
+    target: campaign_title
+    expected: "キャンペーン"
+```
+
+**設計書に URL が無い場合は推測させない。** `open_questions` に挙がり、
+試験項目のレビューで人に提示される。空やプレースホルダのまま残っていれば
+codegen の検証ゲートで落ちる。実行時に「開かない」形で失敗すると、
+URL が違うのかアプリの不具合なのかを切り分けられなくなるため。
+
 内部では `mobile: deepLink` を使う(Android では `am start` が走る)。
 **`driver.get(url)` は使っていない。** エミュレータとシミュレータでは動くが
 実機では動かないため。開けなかった場合は握りつぶさず `DeeplinkError` で落とす。

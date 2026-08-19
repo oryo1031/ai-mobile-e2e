@@ -103,3 +103,27 @@ accounts:
   判断する手がかりになる
 - 設計書にアカウントの記載が無ければ `accounts` は空でよい。
   推測で作らず `open_questions` に挙げる
+
+## ディープリンクの URL
+
+設計書にディープリンクの URL が書かれていれば、`action: open_deeplink` の
+ステップとして `value` に入れる。対象要素は無いので `target` は書かない。
+
+```yaml
+steps:
+  - action: open_deeplink
+    value: "myapp://campaign/12345"
+  - action: verify
+    target: campaign_title
+    expected: キャンペーン画面が表示される
+```
+
+**書かれていなければ推測で作らない。** `myapp://` のようなスキームを
+勝手に決めると、実行時に「開かない」形で失敗し、URL が違うのか
+アプリの不具合なのかが分からなくなる。
+
+`open_questions` に「どのディープリンクの URL を叩くのか設計書に
+追記してください」と挙げる。これは試験項目のレビューで人に提示される。
+
+QR コードから起動する試験も、**QR が指す URL** を書いてもらう。
+QR の画像そのものは自動化の対象にならない。

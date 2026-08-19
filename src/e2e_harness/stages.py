@@ -26,6 +26,7 @@ from .validation import (
     collect_open_questions,
     run_pytest_collect,
     run_ruff,
+    validate_deeplink_urls,
     validate_schema,
     validate_setup_coverage,
     validate_test_code,
@@ -392,6 +393,7 @@ def _gate_codegen(ctx: StageContext) -> ValidationResult:
     result = result.merge(
         validate_setup_coverage(ctx.testcases_path, ctx.config.setup_dir)
     )
+    result = result.merge(validate_deeplink_urls(ctx.testcases_path))
     if not result.ok:
         return result
     result = result.merge(run_ruff(ctx.config.root, ctx.config.generated_tests_dir))

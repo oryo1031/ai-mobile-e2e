@@ -67,6 +67,8 @@ def test_tc_login_001(driver, platform):
   試験項目に紐付けるためにこの形式が必要。
 - 試験項目の `steps` を上から順にコードへ落とす。
   `action: verify` は `assert` にする。
+- `action: open_deeplink` は `open_deeplink(value)` にする。
+  **URL をテストコードに直接書かず、試験項目の `value` をそのまま使う。**
 - **`preconditions` は必ず実装する。** コメントで済ませてはならない。
   詳しくは下の「前提条件のセットアップ」を参照。
 

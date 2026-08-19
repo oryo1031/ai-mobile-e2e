@@ -121,8 +121,8 @@ preconditions:
   セットアップにキーワード引数として渡される
 - **状態を作る必要があるものだけを書く。** 「アプリがインストールされている」
   のような、テスト実行の前提として当然のものは書かない
-- ディープリンクからの起動は前提条件ではなく `steps` 側で扱う
-  (`open_deeplink` で開く操作そのものが試験の対象になるため)
+- ディープリンクからの起動は前提条件ではなく `steps` 側で扱う。
+  `action: open_deeplink` に URL を入れる(開く操作そのものが試験の対象)
 
 ## 会員種別による作り分け
 
@@ -138,6 +138,24 @@ preconditions:
 
 仕様の `accounts` の `description` に、その会員が何を持っているかが
 書かれている。挙動が変わる箇所の判断にはそれを使う。
+
+## ディープリンクのステップ
+
+`action: open_deeplink` は正式な操作。URL は `value` に入れる。
+対象要素が無いので `target` は書かない(書くとスキーマ検証で落ちる)。
+
+```yaml
+steps:
+  - action: open_deeplink
+    value: "myapp://campaign/12345"
+  - action: verify
+    target: campaign_title
+    expected: "キャンペーン"
+```
+
+URL は**仕様から持ってくる**。自分で組み立てない。仕様に URL が無い場合は
+その試験項目を作らず、`assumptions` にその旨を書く。存在しない URL の
+試験項目を作っても、実行時に必ず失敗する。
 
 ## 全エージェント共通の規約
 
