@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "テストアカウント",
+  "description": "E2E で使うテストアカウントの単一ソース。設計書に書かれた値を spec-analyst が抽出して蓄積する。試験項目とテストコードは id で参照し、認証情報を直接持たない。",
+  "type": "object",
+  "required": ["accounts"],
+  "additionalProperties": false,
+  "properties": {
+    "accounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "アカウントの識別子。例: card_member / cardless_member"
+          },
+          "description": {
+            "type": "string",
+            "description": "どういう属性のアカウントか。会員種別など"
+          },
+          "attributes": {
+            "type": "object",
+            "description": "ログインに使う値やアカウントの属性。email / password など。",
+            "additionalProperties": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

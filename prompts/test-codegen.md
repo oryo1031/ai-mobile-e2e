@@ -76,6 +76,7 @@ def test_tc_login_001(driver, platform):
 テスト関数の冒頭で呼ぶ。`params` はキーワード引数として渡す。
 
 ```python
+from tests.accounts import account
 from tests.pages import HomePage
 from tests.setup import setup_logged_in, setup_terms_accepted
 
@@ -83,7 +84,7 @@ from tests.setup import setup_logged_in, setup_terms_accepted
 @pytest.mark.e2e
 def test_tc_deeplink_001(driver, platform):
     """TC_DEEPLINK_001: QR のディープリンクから対象画面が開く"""
-    setup_logged_in(driver, platform, email="user@example.com", password="pass")
+    setup_logged_in(driver, platform, **account("card_member"))
     setup_terms_accepted(driver, platform)
 
     home = HomePage(driver, platform)
@@ -109,6 +110,19 @@ def setup_logged_in(driver, platform, *, email: str, password: str) -> None:
 - **要素の操作は Page Object 経由**。ロケータ文字列を直接書かない
 - **既にあるセットアップは再実装しない。** 同じ `logged_in` を機能ごとに
   作り直すと、アプリが変わったときに直す箇所が増える
+
+### 認証情報を書かない
+
+`preconditions[].params.account` にアカウントの id が入っている。
+`tests.accounts.account(id)` で属性を取り出し、展開して渡す。
+
+```python
+setup_logged_in(driver, platform, **account("card_member"))
+```
+
+**メールアドレスやパスワードをテストコードに直接書かない。**
+値は `testdata/accounts.yaml` の 1 か所にあり、変わったときに
+直す場所がそこだけで済むようにしている。
 
 ### ディープリンクと QR
 

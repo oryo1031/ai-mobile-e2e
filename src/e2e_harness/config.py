@@ -72,6 +72,11 @@ class Config:
         return self.root / self.paths["generated_pages"]
 
     @property
+    def accounts_path(self) -> Path:
+        """テストアカウントの単一ソース。"""
+        return self.root / self.paths.get("accounts", "testdata/accounts.yaml")
+
+    @property
     def setup_dir(self) -> Path:
         """前提条件のセットアップ置き場。"""
         return self.root / self.paths.get("setup", "tests/setup")
@@ -170,6 +175,7 @@ paths:
   generated_tests: "tests/e2e"
   generated_pages: "tests/pages"
   setup: "tests/setup"
+  accounts: "testdata/accounts.yaml"
 """
 
 

@@ -78,3 +78,4 @@ paths:
   generated_tests: "tests/e2e"
   generated_pages: "tests/pages"
   setup: "tests/setup"
+  accounts: "testdata/accounts.yaml"

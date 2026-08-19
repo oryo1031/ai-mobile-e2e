@@ -89,6 +89,47 @@ preconditions:
 使い回される。同じ `logged_in` を機能ごとに作り直さないよう、
 試験項目の工程で ID を揃えさせている。
 
+### テストアカウント
+
+会員種別が複数ある場合(カード会員 / カードレス会員など)、
+**認証情報は試験項目にもテストコードにも書かない。** id で参照する。
+
+```yaml
+preconditions:
+  - id: logged_in
+    description: カード会員でログイン済みであること
+    params:
+      account: card_member
+```
+
+```python
+setup_logged_in(driver, platform, **account("card_member"))
+```
+
+値は `testdata/accounts.yaml` の 1 か所にある。設計書に書かれたアカウントを
+spec-analyst が抽出し、**既存の定義を上書きせずに蓄積する**(別の機能の
+設計書が同じアカウントを違う値で書いていても壊さないため)。
+
+```yaml
+accounts:
+  - id: card_member
+    description: カードを保有している会員
+    attributes:
+      email: "card@example.com"
+      password: "..."
+  - id: cardless_member
+    description: カードを保有していない会員
+    attributes:
+      email: "cardless@example.com"
+      password: "..."
+```
+
+パスワードが変わったときに直す場所がここだけで済む。試験項目ごとに値を
+埋め込む形にすると、変更のたびに全件を追うことになる。
+
+**会員種別で挙動が変わる観点だけ**を種別ごとに作る。関係ない観点まで
+機械的に 2 倍にすると、実行時間が倍になるわりに得られるものが少ない。
+
 ### ディープリンクと QR
 
 ディープリンクは `BasePage.open_deeplink(url)` で開く。端末の機能なので
@@ -740,6 +781,7 @@ iOS 実機は 1 画面・1 要素で `e2e scan-app` と単純なタップまで�
 ├── schemas/                 # 工程間の契約(JSON Schema)
 ├── specs/                   # 人が書く設計書 (SPEC_TEMPLATE.md が雛形)
 ├── locators/registry.yaml   # ロケータの単一ソース
+├── testdata/accounts.yaml   # テストアカウントの単一ソース
 ├── src/e2e_harness/         # オーケストレータ
 ├── tests/
 │   ├── conftest.py          # 証跡の自動取得

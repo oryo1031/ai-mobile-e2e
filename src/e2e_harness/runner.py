@@ -9,10 +9,12 @@ Copilot には複数エージェントを制御する API が無いため、進�
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from . import copilot as copilot_mod
 from . import semantics
@@ -116,12 +118,57 @@ class Runner:
         前には Page Object を再生成する。AI にこの手順を任せると忘れるため、
         決定論的にこちらで行う。
         """
-        if stage.name == "locators":
+        if stage.name == "testcases":
+            self._merge_accounts()
+        elif stage.name == "locators":
             self._warn_if_app_dirty()
             self._capture_analyze_baseline()
             self._write_scan_report()
         elif stage.name == "codegen":
             self._regenerate_pages()
+
+    def _merge_accounts(self) -> None:
+        """spec.yaml のアカウントを testdata/accounts.yaml へ取り込む。
+
+        アカウントは機能をまたいで使い回すため、実行ごとの成果物ではなく
+        蓄積ファイルに置く。既存の定義は上書きせず、新しい id だけを足す
+        (別の機能の設計書が同じアカウントを違う値で書いていても壊さない)。
+
+        AI に統合させると既存の定義を消しかねないので、決定論的に行う。
+        """
+        import yaml
+
+        if not self.context.spec_path.is_file():
+            return
+        try:
+            spec = yaml.safe_load(
+                self.context.spec_path.read_text(encoding="utf-8")
+            ) or {}
+        except yaml.YAMLError:
+            return
+        incoming = spec.get("accounts") or []
+        if not incoming:
+            return
+
+        path = self.config.accounts_path
+        existing: dict[str, Any] = {"accounts": []}
+        if path.is_file():
+            with contextlib.suppress(yaml.YAMLError):
+                existing = yaml.safe_load(path.read_text(encoding="utf-8")) or existing
+        known = {a["id"] for a in existing.get("accounts") or [] if a.get("id")}
+
+        added = [a for a in incoming if a.get("id") and a["id"] not in known]
+        if not added:
+            return
+        existing.setdefault("accounts", [])
+        existing["accounts"].extend(added)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            yaml.safe_dump(existing, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
+        names = ", ".join(a["id"] for a in added)
+        self.reporter.info(f"テストアカウントを追加: {names}")
 
     def _warn_if_app_dirty(self) -> None:
         """アプリ側に未コミットの変更があれば知らせる。

@@ -75,3 +75,30 @@ open_questions: []
 - `role` はスキーマの列挙値から選ぶ。迷ったら `other` にせず、
   実際の操作方法(タップするのか入力するのか)から決める。
 - 設計書に書かれていない画面や要素を勝手に足さない。
+
+## テストアカウントの抽出
+
+設計書にテスト用のアカウントが書かれていれば `accounts` に抽出する。
+**会員種別など属性が異なるものは、別のアカウントとして分ける。**
+
+```yaml
+accounts:
+  - id: card_member
+    description: カードを保有している会員
+    attributes:
+      email: "card@example.com"
+      password: "..."
+  - id: cardless_member
+    description: カードを保有していない会員
+    attributes:
+      email: "cardless@example.com"
+      password: "..."
+```
+
+- `id` は会員種別が読み取れる名前にする(`user1` `test_account` のような
+  区別のつかない名前にしない)
+- ログインに使う値だけでなく、**その会員が何を持っているか**を
+  `description` に書く。試験項目の工程が、会員種別で挙動が変わる箇所を
+  判断する手がかりになる
+- 設計書にアカウントの記載が無ければ `accounts` は空でよい。
+  推測で作らず `open_questions` に挙げる
