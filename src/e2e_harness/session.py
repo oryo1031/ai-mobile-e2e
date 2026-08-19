@@ -45,6 +45,8 @@ def _android_options(config: Config) -> UiAutomator2Options:
     # 検証してしまう事故を避けるため。
     options.app_package = config.app.android_package
     options.app_activity = config.app.android_activity
+    # 状態を残すかは設定で明示する。既定は消す(テスト間を独立させる)。
+    options.no_reset = bool(cfg.get("no_reset", False))
     options.new_command_timeout = 300
     return options
 
@@ -68,6 +70,7 @@ def _ios_options(config: Config) -> XCUITestOptions:
     if cfg.get("updated_wda_bundle_id"):
         options.updated_wda_bundle_id = str(cfg["updated_wda_bundle_id"])
 
+    options.no_reset = bool(cfg.get("no_reset", False))
     options.bundle_id = config.app.ios_bundle_id
     # 実機用ビルドがあれば Appium に投入させる。
     # 無ければ導入済みの前提で bundleId から起動する。

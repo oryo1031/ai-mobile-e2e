@@ -14,16 +14,26 @@
 
 ```python
 def setup_logged_in(driver, platform, *, login_id: str, password: str) -> None:
+    home = HomePage(driver, platform)
+    if home.is_title_displayed():
+        return  # 既にログイン済み
+
     login = LoginPage(driver, platform)
     login.input_login_id_field(login_id)
     login.input_password_field(password)
     login.tap_submit_button()
+    home.wait_for_title()
 ```
 
 - 第 1・第 2 引数は `driver` と `platform` に固定する
 - `preconditions[].params` の値はキーワード引数で受ける
 - **要素の操作は Page Object 経由で行う。** ロケータ文字列を直接書かない
 - 同じ前提を機能ごとに作り直さない。既にあるものは再利用する
+- **何度呼ばれても同じ結果になるように書く。** 冒頭で今の状態を確かめ、
+  既に満たしていればすぐ返す。`no_reset: true` にすると状態が次のテストへ
+  引き継がれ、これが無いと 2 件目以降が壊れる
+- 状態の判定には `is_<要素>_displayed()` を使う。要素が無いときに例外ではなく
+  `False` が返るため
 
 ここに置いた関数は、このパッケージから import できるようにしておくこと。
 """

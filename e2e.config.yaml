@@ -42,6 +42,12 @@ appium:
     # 端末の選択に実際に使われるのはこちらで、device_name は表示用。
     udid: ""
     device_name: "Android 実機"
+    # テストごとにアプリの状態を消すか。
+    # false … 毎回まっさらから始まる。テスト間が独立する代わりに
+    #         毎回ログインからやり直すので遅い(既定)
+    # true  … 状態が残る。速いが、セットアップが「既にその状態」を
+    #         扱えないと 2 件目以降が壊れる
+    no_reset: false
 
   ios:
     platform_name: "iOS"
@@ -60,6 +66,8 @@ appium:
     xcode_signing_id: "iPhone Developer"
     # 無料の Apple ID を使う場合や、Bundle ID を固定したい場合に指定する。
     updated_wda_bundle_id: ""
+    # Android 側と同じ意味。
+    no_reset: false
 
 copilot:
   # Copilot CLI の実行ファイル。

@@ -118,6 +118,32 @@ def setup_logged_in(driver, platform, *, login_id: str, password: str) -> None:
 - **既にあるセットアップは再実装しない。** 同じ `logged_in` を機能ごとに
   作り直すと、アプリが変わったときに直す箇所が増える
 
+### 既にその状態なら何もしない
+
+**セットアップは何度呼ばれても同じ結果になるように書く。**
+
+`no_reset: true` にするとアプリの状態が次のテストへ引き継がれる。
+そのとき「ログイン画面を操作する」前提のセットアップは、既にログイン済みで
+ログイン画面が出ていないため要素を見つけられず落ちる。
+
+冒頭で今の状態を確かめ、既に満たしていればすぐ返す。
+
+```python
+def setup_logged_in(driver, platform, *, login_id: str, password: str) -> None:
+    home = HomePage(driver, platform)
+    if home.is_title_displayed():
+        return  # 既にログイン済み
+
+    login = LoginPage(driver, platform)
+    login.input_login_id_field(login_id)
+    login.input_password_field(password)
+    login.tap_submit_button()
+    home.wait_for_title()
+```
+
+状態の判定には `is_<要素>_displayed()` を使う。要素が無いときに例外ではなく
+`False` が返るため、判定に使える。`find` や `wait_for_` は例外になるので使わない。
+
 ### 認証情報を書かない
 
 `preconditions[].params.account` にアカウントの id が入っている。

@@ -19,7 +19,11 @@ from __future__ import annotations
 from typing import Any
 
 from appium.webdriver.common.appiumby import AppiumBy
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    TimeoutException,
+    WebDriverException,
+)
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -34,6 +38,14 @@ class ElementNotFoundError(AssertionError):
 
     ロケータ不備なのかプロダクト側の問題なのかを run-analyst が
     切り分けられるよう、専用の例外にしてある。
+    """
+
+
+class DeeplinkError(AssertionError):
+    """ディープリンクを開けなかった。
+
+    「開いていないのに次のステップへ進む」と、失敗の原因が
+    まったく別の場所に見えてしまうため専用の例外にしてある。
     """
 
 
@@ -151,10 +163,40 @@ class BasePage:
         """ディープリンクでアプリを開く。
 
         画面操作ではなく端末の機能なので、Page Object の生成対象ではなく
-        ここに置く。`driver.get()` は UiAutomator2 / XCUITest の
-        どちらでもディープリンクを開ける。
+        ここに置く。
+
+        **`driver.get(url)` は使わない。** エミュレータとシミュレータでは
+        動くが、実機では動かないことが知られている。代わりに
+        `mobile: deepLink` を使う(Android では内部で `am start` が走る)。
 
         QR コードから起動する試験項目などは、QR の読み取りそのものを
         自動化するのではなく、QR が指す URL をここへ渡して代替する。
         """
-        self.driver.get(url)
+        capabilities = getattr(self.driver, "capabilities", {}) or {}
+        if self.platform == ANDROID:
+            target = capabilities.get("appPackage") or capabilities.get(
+                "appium:appPackage"
+            )
+            args = {"url": url, "package": target}
+        else:
+            target = capabilities.get("bundleId") or capabilities.get(
+                "appium:bundleId"
+            )
+            args = {"url": url, "bundleId": target}
+
+        try:
+            self.driver.execute_script("mobile: deepLink", args)
+        except WebDriverException as exc:
+            # 端末やドライバのバージョンによっては使えないことがある。
+            # 失敗を握りつぶすと「開いていないのに次へ進む」ので、
+            # 代替を試したうえで、それも駄目なら理由を添えて落とす。
+            try:
+                self.driver.get(url)
+            except WebDriverException as fallback_exc:
+                raise DeeplinkError(
+                    f"ディープリンクを開けません: {url}\n"
+                    f"  mobile: deepLink -> {exc.msg}\n"
+                    f"  driver.get()     -> {fallback_exc.msg}\n"
+                    "実機では driver.get() が使えないため、"
+                    "mobile: deepLink が失敗する原因を確認してください。"
+                ) from exc
