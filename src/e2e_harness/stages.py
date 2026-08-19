@@ -124,12 +124,18 @@ def _spec_prompt(ctx: StageContext) -> str:
 
 
 def _testcases_prompt(ctx: StageContext) -> str:
+    # 参照できる id の一覧を渡さないと、定義済みでも使われない。
     return (
         "正規化仕様から試験項目 YAML を設計してください。\n\n"
         f"- 入力: {ctx.relative(ctx.spec_path)}\n"
         f"- 出力先: {ctx.relative(ctx.testcases_path)}\n"
-        f"- スキーマ: schemas/testcases.schema.json\n\n"
+        f"- スキーマ: schemas/testcases.schema.json\n"
+        f"- 使えるテストアカウント: {ctx.relative(ctx.config.accounts_path)}\n"
+        f"- 使えるディープリンク: {ctx.relative(ctx.config.deeplinks_path)}\n\n"
         "正常系・異常系・境界値の 3 観点を意識的に埋めてください。"
+        "アカウントとディープリンクは、上記のファイルに定義されている id"
+        "だけを参照してください。必要なものが未定義なら、その試験項目は"
+        "作らずに assumptions へ理由を残してください。"
         "この出力は人がレビューします。"
     )
 
