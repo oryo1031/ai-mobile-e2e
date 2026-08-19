@@ -1,0 +1,18 @@
+# ディープリンクの単一ソース。
+#
+# ここに手で書く。設計書に正確な URL が書かれていないため、
+# 設計書からは運ばれてこない。
+#
+# 試験項目は id で参照し、URL を持たない。試験項目は作り直されるが
+# URL はそれより寿命が長いため、直接書くと作り直すたびに消える。
+#
+# 例:
+# deeplinks:
+#   - id: campaign_detail
+#     description: キャンペーン詳細画面を開く
+#     url: "myapp://campaign/12345"
+#   - id: coupon_list
+#     description: クーポン一覧を開く
+#     url: "myapp://coupons"
+
+deeplinks: []

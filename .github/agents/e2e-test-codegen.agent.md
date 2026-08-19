@@ -67,8 +67,9 @@ def test_tc_login_001(driver, platform):
   試験項目に紐付けるためにこの形式が必要。
 - 試験項目の `steps` を上から順にコードへ落とす。
   `action: verify` は `assert` にする。
-- `action: open_deeplink` は `open_deeplink(value)` にする。
-  **URL をテストコードに直接書かず、試験項目の `value` をそのまま使う。**
+- `action: open_deeplink` は `open_deeplink(deeplink(value))` にする。
+  `value` は id なので `tests.deeplinks.deeplink()` で URL に解決する。
+  **URL をテストコードに直接書かない。**
 - **`preconditions` は必ず実装する。** コメントで済ませてはならない。
   詳しくは下の「前提条件のセットアップ」を参照。
 
@@ -86,6 +87,7 @@ def test_tc_login_001(driver, platform):
 
 ```python
 from tests.accounts import account
+from tests.deeplinks import deeplink
 from tests.pages import HomePage
 from tests.setup import setup_logged_in, setup_terms_accepted
 
@@ -97,7 +99,7 @@ def test_tc_deeplink_001(driver, platform):
     setup_terms_accepted(driver, platform)
 
     home = HomePage(driver, platform)
-    home.open_deeplink("myapp://campaign/12345")
+    home.open_deeplink(deeplink("campaign_detail"))
     ...
 ```
 

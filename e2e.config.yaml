@@ -87,3 +87,4 @@ paths:
   generated_pages: "tests/pages"
   setup: "tests/setup"
   accounts: "testdata/accounts.yaml"
+  deeplinks: "testdata/deeplinks.yaml"

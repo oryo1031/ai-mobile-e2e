@@ -242,11 +242,17 @@ def validate_setup_coverage(
     return ValidationResult(ok=False, errors=errors)
 
 
-def validate_deeplink_urls(testcases_path: Path) -> ValidationResult:
-    """ディープリンクの URL が使える形か確認する。
+def validate_deeplink_urls(
+    testcases_path: Path, deeplinks_path: Path
+) -> ValidationResult:
+    """ディープリンクの指定が解決できるか確認する。
 
-    スキーマは value の存在までしか見ない。空文字やプレースホルダのまま
-    実行すると「開かない」形で失敗し、URL が違うのかアプリの不具合なのかが
+    `value` は次のどちらかとして扱う。
+
+    - `://` を含む … URL の直書き。形式だけ見る(その場限りの確認用)
+    - 含まない     … id とみなし、testdata/deeplinks.yaml に存在するか見る
+
+    実行時に「開かない」形で失敗すると、URL が違うのかアプリの不具合なのかを
     切り分けられなくなる。生成の段階で落とす。
     """
     if not testcases_path.is_file():
@@ -256,33 +262,46 @@ def validate_deeplink_urls(testcases_path: Path) -> ValidationResult:
     except yaml.YAMLError:
         return ValidationResult(ok=True)
 
+    known: dict[str, str] = {}
+    if deeplinks_path.is_file():
+        try:
+            raw = yaml.safe_load(deeplinks_path.read_text(encoding="utf-8")) or {}
+            known = {
+                str(e["id"]): str(e["url"])
+                for e in raw.get("deeplinks") or []
+                if e.get("id") and e.get("url")
+            }
+        except yaml.YAMLError:
+            known = {}
+
+    placeholders = ("<", ">", "xxx", "TODO", "...")
     errors: list[str] = []
     for case in (data or {}).get("testcases", []):
         for index, step in enumerate(case.get("steps") or [], start=1):
             if step.get("action") != "open_deeplink":
                 continue
-            url = str(step.get("value") or "").strip()
-            case_id = case.get("id", "?")
-            if not url:
+            where = f"{case.get('id', '?')} の {index} 番目"
+            value = str(step.get("value") or "").strip()
+
+            if not value:
+                errors.append(f"{where}: ディープリンクの指定が空です")
+            elif "://" in value:
+                if any(mark in value for mark in placeholders):
+                    errors.append(f"{where}: URL が埋まっていません: {value!r}")
+            elif value not in known:
+                names = ", ".join(sorted(known)) or "(未定義)"
                 errors.append(
-                    f"{case_id} の {index} 番目: ディープリンクの URL が空です"
+                    f"{where}: ディープリンク '{value}' が"
+                    f" {deeplinks_path.name} にありません。定義済み: {names}"
                 )
-            elif "://" not in url:
-                errors.append(
-                    f"{case_id} の {index} 番目: URL に見えません: {url!r}"
-                )
-            elif any(mark in url for mark in ("<", ">", "xxx", "TODO", "...")):
-                errors.append(
-                    f"{case_id} の {index} 番目:"
-                    f" URL が埋まっていません: {url!r}"
-                )
+
     if not errors:
         return ValidationResult(ok=True)
     return ValidationResult(
         ok=False,
         errors=[
-            "ディープリンクの URL に問題があります。"
-            " 設計書に実際の URL を追記して試験項目を作り直してください。",
+            "ディープリンクの指定に問題があります。"
+            f" URL は {deeplinks_path} に書き、試験項目は id で参照します。",
             *errors,
         ],
     )

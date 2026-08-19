@@ -77,6 +77,11 @@ class Config:
         return self.root / self.paths.get("accounts", "testdata/accounts.yaml")
 
     @property
+    def deeplinks_path(self) -> Path:
+        """ディープリンクの単一ソース。"""
+        return self.root / self.paths.get("deeplinks", "testdata/deeplinks.yaml")
+
+    @property
     def setup_dir(self) -> Path:
         """前提条件のセットアップ置き場。"""
         return self.root / self.paths.get("setup", "tests/setup")
@@ -184,6 +189,7 @@ paths:
   generated_pages: "tests/pages"
   setup: "tests/setup"
   accounts: "testdata/accounts.yaml"
+  deeplinks: "testdata/deeplinks.yaml"
 """
 
 

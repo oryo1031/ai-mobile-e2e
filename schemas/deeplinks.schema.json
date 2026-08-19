@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ディープリンク",
+  "description": "テストで叩くディープリンクの単一ソース。設計書に正確な URL が書かれていないため手で書く。試験項目は id で参照し、URL を持たない。",
+  "type": "object",
+  "required": ["deeplinks"],
+  "additionalProperties": false,
+  "properties": {
+    "deeplinks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "url"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "試験項目から参照する識別子。遷移先が読み取れる名前にする。"
+          },
+          "description": {
+            "type": "string",
+            "description": "どこへ遷移するか。試験項目の工程が使う遷移先を選ぶ手がかりになる。"
+          },
+          "url": {
+            "type": "string",
+            "description": "実際に叩く URL。myapp://... または https://..."
+          }
+        }
+      }
+    }
+  }
+}

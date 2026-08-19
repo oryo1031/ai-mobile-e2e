@@ -138,23 +138,40 @@ Page Object の生成対象ではなく、harness が持っている。
 `open_deeplink()` に渡して代替する。カメラでの読み取りは Appium の守備範囲外で、
 試験項目の意図(遷移先が正しいか)はこれで満たせる。
 
-URL は**設計書から運ばれる**。試験項目に `action: open_deeplink` のステップ
-として載り、そこから `open_deeplink(value)` になる。手で追記する場所は
-用意していない(値が二重管理になるため)。
+URL は **`testdata/deeplinks.yaml` に手で書く。** 設計書に正確な URL が
+書かれていないことが多いため、ここが唯一の情報源になる。
+
+```yaml
+deeplinks:
+  - id: campaign_detail
+    description: キャンペーン詳細画面を開く
+    url: "myapp://campaign/12345"
+  - id: coupon_list
+    description: クーポン一覧を開く
+    url: "myapp://coupons"
+```
+
+試験項目は **id で参照する**。URL を持たない。
 
 ```yaml
 steps:
   - action: open_deeplink
-    value: "myapp://campaign/12345"
+    value: campaign_detail
   - action: verify
     target: campaign_title
     expected: "キャンペーン"
 ```
 
-**設計書に URL が無い場合は推測させない。** `open_questions` に挙がり、
-試験項目のレビューで人に提示される。空やプレースホルダのまま残っていれば
-codegen の検証ゲートで落ちる。実行時に「開かない」形で失敗すると、
-URL が違うのかアプリの不具合なのかを切り分けられなくなるため。
+**試験項目に URL を直接書かない。** 試験項目は作り直されるが URL は
+それより寿命が長いため、埋め込むと作り直すたびに消える。id 参照なら
+URL を書き換えても試験項目はそのまま使える。
+
+未定義の id は codegen の検証ゲートで落ち、定義済みの一覧が示される。
+実行時に「開かない」形で失敗すると、URL が違うのかアプリの不具合なのかを
+切り分けられなくなるため、生成の段階で止める。
+
+その場限りの確認用に URL の直書きも通る(`myapp://...` のように
+`://` を含む値)。
 
 内部では `mobile: deepLink` を使う(Android では `am start` が走る)。
 **`driver.get(url)` は使っていない。** エミュレータとシミュレータでは動くが
@@ -817,7 +834,9 @@ iOS 実機は 1 画面・1 要素で `e2e scan-app` と単純なタップまで�
 ├── schemas/                 # 工程間の契約(JSON Schema)
 ├── specs/                   # 人が書く設計書 (SPEC_TEMPLATE.md が雛形)
 ├── locators/registry.yaml   # ロケータの単一ソース
-├── testdata/accounts.yaml   # テストアカウントの単一ソース
+├── testdata/
+│   ├── accounts.yaml        # テストアカウントの単一ソース
+│   └── deeplinks.yaml       # ディープリンクの単一ソース
 ├── src/e2e_harness/         # オーケストレータ
 ├── tests/
 │   ├── conftest.py          # 証跡の自動取得

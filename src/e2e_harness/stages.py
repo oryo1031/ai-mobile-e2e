@@ -393,7 +393,9 @@ def _gate_codegen(ctx: StageContext) -> ValidationResult:
     result = result.merge(
         validate_setup_coverage(ctx.testcases_path, ctx.config.setup_dir)
     )
-    result = result.merge(validate_deeplink_urls(ctx.testcases_path))
+    result = result.merge(
+        validate_deeplink_urls(ctx.testcases_path, ctx.config.deeplinks_path)
+    )
     if not result.ok:
         return result
     result = result.merge(run_ruff(ctx.config.root, ctx.config.generated_tests_dir))

@@ -134,18 +134,23 @@ preconditions:
 
 ## ディープリンクのステップ
 
-`action: open_deeplink` は正式な操作。URL は `value` に入れる。
-対象要素が無いので `target` は書かない(書くとスキーマ検証で落ちる)。
+`action: open_deeplink` は正式な操作。**`value` には URL ではなく
+`testdata/deeplinks.yaml` の id を入れる。** 対象要素が無いので
+`target` は書かない(書くとスキーマ検証で落ちる)。
 
 ```yaml
 steps:
   - action: open_deeplink
-    value: "myapp://campaign/12345"
+    value: campaign_detail
   - action: verify
     target: campaign_title
     expected: "キャンペーン"
 ```
 
-URL は**仕様から持ってくる**。自分で組み立てない。仕様に URL が無い場合は
-その試験項目を作らず、`assumptions` にその旨を書く。存在しない URL の
-試験項目を作っても、実行時に必ず失敗する。
+- **`testdata/deeplinks.yaml` にある id だけを使う。** 無い id を書くと
+  検証ゲートで落ちる
+- URL を直接書かない。設計書に URL は書かれておらず、
+  `testdata/deeplinks.yaml` が唯一の情報源になっている
+- 必要な遷移先が定義されていなければ、その試験項目を作らず
+  `assumptions` に「このディープリンクが未定義」と残す。
+  存在しない遷移先の試験項目を作っても実行時に必ず失敗する
