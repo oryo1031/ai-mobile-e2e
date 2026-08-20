@@ -517,6 +517,12 @@ class Runner:
                 )
                 return outcome
             self.reporter.failure(outcome.message or f"{stage.title} が失敗しました。")
+            # ゲートや実行工程の失敗理由は result に入っている。
+            # ここで出さないと「失敗しました」しか画面に出ず、原因が追えない。
+            if outcome.result is not None:
+                for error in outcome.result.errors[:15]:
+                    for line in str(error).splitlines():
+                        self.reporter.info(line)
             return outcome
 
 

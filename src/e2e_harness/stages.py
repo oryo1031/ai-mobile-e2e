@@ -453,12 +453,24 @@ def _execute_tests(ctx: StageContext) -> ValidationResult:
             [] if proc.returncode == 0 else ["失敗したテストがあります。次工程で分析します。"]
         )
         return ValidationResult(ok=True, warnings=warnings)
+    # 終了コードの意味を添える。数字だけでは何を直せばよいか分からない。
+    hints = {
+        2: "テストの収集に失敗しました。import エラーの可能性があります"
+        "(tests/setup/ や tests/deeplinks.py の参照先を確認してください)。",
+        3: "pytest の内部エラーです。",
+        4: "pytest の使い方が不正です。",
+        5: "テストが 1 件も収集されませんでした。"
+        " tests/e2e/ に test_*.py があるか確認してください。",
+    }
+    output = (proc.stdout.strip() + "\n" + proc.stderr.strip()).strip()
+    tail = [line for line in output.splitlines() if line.strip()][-25:]
     return ValidationResult(
         ok=False,
         errors=[
             f"pytest の実行に失敗しました (exit={proc.returncode})",
-            proc.stdout.strip()[-2000:],
-            proc.stderr.strip()[-2000:],
+            *([hints[proc.returncode]] if proc.returncode in hints else []),
+            *tail,
+            f"全文: {ctx.relative(ctx.run_dir / 'pytest_output.txt')}",
         ],
     )
 
