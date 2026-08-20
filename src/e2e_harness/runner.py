@@ -87,10 +87,13 @@ class Runner:
         *,
         mode: ExecutionMode,
         reporter: Reporter | None = None,
+        force: set[str] | None = None,
     ) -> None:
         self.config = config
         self.state = run_state
         self.mode = mode
+        #: 成果物が揃っていても必ず実行し直す工程 (`--redo`)。
+        self.force = force or set()
         self.reporter = reporter or Reporter()
         self.context = StageContext(
             config=config,
@@ -381,19 +384,26 @@ class Runner:
             self.save()
             return StageOutcome(stage.name, StageStatus.FAILED, result=result)
 
-        # 手動モードでは、人が Copilot のチャットで工程を実行し終えている
-        # ことがある。その場合は成果物が既に揃っているので、プロンプトを
-        # 再発行せずゲートだけ通して先へ進める。これが無いと手動モードで
-        # ワークフローが永久に進まない。
+        # 成果物が既に揃っていてゲートを通るなら、AI を呼ぶ必要はない。
+        # 実行方式に関係なく成り立つ。
+        #
+        # 手動モードでは、人がチャットで実行し終えた状態がこれにあたる。
+        # 自動モードでも、前回の実行で作られた成果物がそのまま使えるなら
+        # 作り直す意味がない(時間とトークンを消費し、生成物も変わる)。
+        # 意図してやり直したい場合は `e2e resume --redo <工程>` を使う。
         #
         # ゲートが落ちている場合は、その内容を次に書き出すプロンプトへ渡す。
-        # そうしないと人は同じプロンプトを渡されるだけで、何が悪かったのかが
+        # そうしないと同じプロンプトを渡されるだけで、何が悪かったのかが
         # 分からない。
         feedback = ""
-        if self.mode is ExecutionMode.MANUAL and stage.gate is not None:
+        if stage.gate is not None and stage.name not in self.force:
             existing = stage.gate(self.context)
             if existing.ok:
-                self.reporter.info("成果物が既に揃っているため、この工程は完了とみなします。")
+                self.reporter.info(
+                    "成果物が既に揃っており検証も通ったため、この工程は飛ばします。"
+                    " 作り直す場合は `e2e resume --redo "
+                    f"{stage.name}` を使ってください。"
+                )
                 stage_state.status = StageStatus.COMPLETED
                 stage_state.finished_at = state_mod.now()
                 stage_state.error = None

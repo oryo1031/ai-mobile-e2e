@@ -25,7 +25,13 @@ from .pages import generate as generate_pages
 from .registry import diff as registry_diff
 from .registry import load as load_registry
 from .runner import Runner, build_run
-from .stages import STAGE_BY_NAME, STAGE_NAMES, STAGES, StageContext
+from .stages import (
+    STAGE_BY_NAME,
+    STAGE_NAMES,
+    STAGES,
+    StageContext,
+    stage_index,
+)
 from .state import StageStatus
 
 PLATFORMS = ("android", "ios")
@@ -167,10 +173,25 @@ def cmd_run(config: Config, args: argparse.Namespace) -> int:
 def cmd_resume(config: Config, args: argparse.Namespace) -> int:
     run_id = _resolve_run_id(config, args.run)
     run_state = state_mod.load(config.artifacts_dir, run_id)
+
+    force: set[str] = set()
+    if args.redo:
+        # 指定した工程とそれ以降を未実行に戻す。前の工程の成果物は残す。
+        # 状態を戻すだけでは、成果物が揃っている工程が「検証を通るので
+        # 飛ばす」に拾われて再実行されない。force で明示的に上書きする。
+        start = stage_index(args.redo)
+        force = set(STAGE_NAMES[start:])
+        reset = [name for name in STAGE_NAMES[start:] if name in run_state.stages]
+        for name in reset:
+            run_state.stages[name] = state_mod.StageState()
+        state_mod.save(config.artifacts_dir, run_state)
+        titles = ", ".join(STAGE_BY_NAME[n].title for n in reset)
+        print(f"やり直します: {titles or STAGE_BY_NAME[args.redo].title}")
+
     mode = copilot_mod.resolve_mode(args.mode, config.copilot.command)
     print(f"実行 ID: {run_id} を再開します")
     print(f"実行方式: {mode.label}")
-    runner = Runner(config, run_state, mode=mode)
+    runner = Runner(config, run_state, mode=mode, force=force)
     outcome = runner.run(until=args.until)
     return 0 if outcome is None or outcome.status is not StageStatus.FAILED else 1
 
@@ -762,6 +783,11 @@ def build_parser() -> argparse.ArgumentParser:
     resume_p.add_argument("--run", help="実行 ID (既定: 最新)")
     resume_p.add_argument("--mode", choices=("auto", "cli", "manual"), default="auto")
     resume_p.add_argument("--until", choices=STAGE_NAMES)
+    resume_p.add_argument(
+        "--redo",
+        choices=STAGE_NAMES,
+        help="この工程以降をやり直す。既定では、検証を通る工程は飛ばされる。",
+    )
     resume_p.set_defaults(func=cmd_resume)
 
     status_p = sub.add_parser("status", help="進捗を表示する")
