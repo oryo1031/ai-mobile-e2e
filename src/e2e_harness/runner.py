@@ -313,6 +313,9 @@ class Runner:
                 agent=stage.agent,
             )
 
+        self.reporter.info(
+            f"Copilot を実行しています (最大 {self.config.copilot.timeout_seconds} 秒)"
+        )
         result = copilot_mod.run_cli(
             command=self.config.copilot.command,
             prompt=task,
@@ -328,10 +331,14 @@ class Runner:
             (result.stdout or "") + "\n" + (result.stderr or ""), encoding="utf-8"
         )
         if not result.ok:
-            return AgentInvocation(
-                outcome=AgentOutcome.FAILED,
-                message=f"Copilot の実行が失敗しました (exit={result.returncode})",
-            )
+            # 終了コードだけでは原因が追えない。出力の末尾とログの場所を添える。
+            detail = ((result.stderr or "") + "\n" + (result.stdout or "")).strip()
+            tail = [line for line in detail.splitlines() if line.strip()][-8:]
+            message = f"Copilot の実行が失敗しました (exit={result.returncode})"
+            if tail:
+                message += "\n    " + "\n    ".join(tail)
+            message += f"\n    ログ: {transcript}"
+            return AgentInvocation(outcome=AgentOutcome.FAILED, message=message)
         return AgentInvocation(outcome=AgentOutcome.DONE)
 
     # ------------------------------------------------------------------
