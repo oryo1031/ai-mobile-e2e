@@ -98,6 +98,22 @@ def run_cli(
     timeout_seconds: int,
     add_dirs: list[Path] | None = None,
 ) -> CopilotResult:
+    if " " in model.strip():
+        # /model の一覧に出る表示名(例: "GPT-5.6 Luna")をそのまま
+        # 書いてしまう間違いが起きやすい。--model はスラッグ形式の ID を
+        # 期待するため、実行前に気づけるようにする。
+        return CopilotResult(
+            ok=False,
+            stdout="",
+            stderr=(
+                f"モデル指定が表示名になっています: {model!r}\n"
+                "--model はスラッグ形式の ID を期待します"
+                " (例: claude-sonnet-4.5 / gpt-5.3-codex / auto)。\n"
+                "`copilot` を起動して /model で正しい ID を確認するか、"
+                "e2e.config.yaml の copilot.model を空にしてください。"
+            ),
+            returncode=-1,
+        )
     if not cli_available(command):
         raise CopilotUnavailableError(
             f"Copilot CLI '{command}' が見つかりません。"

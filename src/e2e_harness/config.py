@@ -175,6 +175,10 @@ copilot:
   # Copilot CLI の実行ファイル。
   command: "copilot"
   # 再現性のためモデルを固定する。空にすると Copilot の既定に従う。
+  #
+  # **スラッグ形式の ID を書く。** /model の一覧に出る表示名
+  # ("GPT-5.6 Luna" など空白を含むもの)は通らない。
+  #   例: "claude-sonnet-4.5" / "gpt-5.3-codex" / "auto"
   model: ""
   # 各工程で許可するツール。工程ごとに上書きできる。
   default_allow_tools: "read,write"
