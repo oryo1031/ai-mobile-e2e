@@ -7,6 +7,7 @@ registry.yaml に実在する要素からしか生まれない。
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 from .registry import Element, Registry, Screen
@@ -153,23 +154,54 @@ def generate(registry: Registry, output_dir: Path, source: str) -> list[Path]:
     return written
 
 
-def public_api(registry: Registry) -> dict[str, set[str]]:
-    """生成される Page Object のクラス名とメソッド名の一覧。
+#: BasePage を読めなかったときに使う最低限の一覧。
+#: 実際は base.py から読み取るので、通常こちらは使われない。
+_FALLBACK_BASE_METHODS = frozenset(
+    {"tap", "input", "toggle", "find", "text_of", "is_checked", "is_displayed"}
+)
+
+
+def base_page_methods(pages_dir: Path) -> set[str]:
+    """BasePage が実際に持っている公開メソッドを読み取る。
+
+    以前はここを手書きの一覧で持っていたため、BasePage にメソッドを
+    足しても検証側が知らないままになり、生成テストが「存在しない
+    メソッドを呼んでいる」と誤判定されて工程が止まった。
+    実物から読むことで二重管理をなくす。
+    """
+    base_file = pages_dir / "base.py"
+    if not base_file.is_file():
+        return set(_FALLBACK_BASE_METHODS)
+    try:
+        tree = ast.parse(base_file.read_text(encoding="utf-8"), filename=str(base_file))
+    except SyntaxError:
+        return set(_FALLBACK_BASE_METHODS)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "BasePage":
+            return {
+                item.name
+                for item in node.body
+                if isinstance(item, ast.FunctionDef)
+                and not item.name.startswith("_")
+            }
+    return set(_FALLBACK_BASE_METHODS)
+
+
+def public_api(registry: Registry, pages_dir: Path | None = None) -> dict[str, set[str]]:
+    """テストコードから呼んでよいクラスとメソッドの一覧。
 
     テストコードの静的検証で「存在しないメソッドを呼んでいないか」を
     判定するために使う。
     """
-    api: dict[str, set[str]] = {}
-    base_methods = {
-        "tap",
-        "input",
-        "toggle",
-        "find",
-        "text_of",
-        "is_checked",
-        "is_displayed",
-        "wait_for",
-    }
+    base_methods = (
+        base_page_methods(pages_dir) if pages_dir is not None
+        else set(_FALLBACK_BASE_METHODS)
+    )
+
+    # 画面に属さない操作(ディープリンクなど)は BasePage を直接使う。
+    api: dict[str, set[str]] = {"BasePage": set(base_methods)}
+
     for screen in registry.screens:
         methods: set[str] = set(base_methods)
         for element in screen.elements:

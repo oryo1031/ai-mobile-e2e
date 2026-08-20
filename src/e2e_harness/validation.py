@@ -98,10 +98,22 @@ class _PageUsageVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
         func = node.func
-        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-            variable = func.value.id
-            if variable in self.instances:
-                self.calls.append((self.instances[variable], func.attr, node.lineno))
+        if isinstance(func, ast.Attribute):
+            # 変数に入れてから呼ぶ形:  page = BillPage(...) / page.tap_x()
+            if isinstance(func.value, ast.Name):
+                variable = func.value.id
+                if variable in self.instances:
+                    self.calls.append(
+                        (self.instances[variable], func.attr, node.lineno)
+                    )
+            # その場で生成して呼ぶ形:  BillPage(driver, platform).tap_x()
+            # ディープリンクの推奨形がこれなので、見逃すと検証が効かない。
+            elif isinstance(func.value, ast.Call) and isinstance(
+                func.value.func, ast.Name
+            ):
+                class_name = func.value.func.id
+                if class_name.endswith("Page"):
+                    self.calls.append((class_name, func.attr, node.lineno))
         self.generic_visit(node)
 
 
@@ -114,6 +126,13 @@ def validate_test_code(
 
     errors: list[str] = []
     warnings: list[str] = []
+    if "BasePage" not in api:
+        # base.py を読めていない。API 一覧が実物より狭くなり、
+        # 正しいコードを「存在しないメソッド」と誤判定する。
+        warnings.append(
+            "BasePage の API を読み取れていません。"
+            " tests/pages/base.py が存在するか確認してください。"
+        )
     files = sorted(test_dir.rglob("test_*.py"))
     if not files:
         return ValidationResult(ok=False, errors=[f"テストファイルがありません: {test_dir}"])
@@ -129,7 +148,8 @@ def validate_test_code(
         visitor.visit(tree)
 
         for name in visitor.imported:
-            if name.endswith("Page") and name != "BasePage" and name not in api:
+            # BasePage も api に含まれる(画面に属さない操作の呼び出し先)。
+            if name.endswith("Page") and name not in api:
                 errors.append(
                     f"{file.name}: 存在しない Page Object を import しています: {name}"
                 )
@@ -146,7 +166,7 @@ def validate_test_code(
                     f"{method}() はありません"
                 )
 
-        if not visitor.instances:
+        if not visitor.instances and not visitor.calls:
             warnings.append(
                 f"{file.name}: Page Object を経由していません。"
                 "ロケータを直接扱っていないか確認してください。"

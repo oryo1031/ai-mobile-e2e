@@ -391,7 +391,10 @@ def _gate_codegen(ctx: StageContext) -> ValidationResult:
     from .pages import public_api
 
     registry = load_registry(ctx.config.locators_path)
-    result = validate_test_code(ctx.config.generated_tests_dir, public_api(registry))
+    result = validate_test_code(
+        ctx.config.generated_tests_dir,
+        public_api(registry, ctx.config.generated_pages_dir),
+    )
     if not result.ok:
         return result
     # 前提条件のセットアップが無いと、テストはその画面へ到達できないまま

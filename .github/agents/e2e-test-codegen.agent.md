@@ -67,9 +67,8 @@ def test_tc_login_001(driver, platform):
   試験項目に紐付けるためにこの形式が必要。
 - 試験項目の `steps` を上から順にコードへ落とす。
   `action: verify` は `assert` にする。
-- `action: open_deeplink` は `open_deeplink(deeplink(value))` にする。
-  `value` は id なので `tests.deeplinks.deeplink()` で URL に解決する。
-  **URL をテストコードに直接書かない。**
+- `action: open_deeplink` は **`BasePage` から呼ぶ**。決まった書き方があるので
+  下の「ディープリンクの呼び出し方」に従うこと。
 - **`preconditions` は必ず実装する。** コメントで済ませてはならない。
   詳しくは下の「前提条件のセットアップ」を参照。
 
@@ -88,7 +87,7 @@ def test_tc_login_001(driver, platform):
 ```python
 from tests.accounts import account
 from tests.deeplinks import deeplink
-from tests.pages import HomePage
+from tests.pages import BasePage, BillPage
 from tests.setup import setup_logged_in, setup_terms_accepted
 
 
@@ -98,9 +97,10 @@ def test_tc_deeplink_001(driver, platform):
     setup_logged_in(driver, platform, **account("card_member"))
     setup_terms_accepted(driver, platform)
 
-    home = HomePage(driver, platform)
-    home.open_deeplink(deeplink("campaign_detail"))
-    ...
+    BasePage(driver, platform).open_deeplink(deeplink("dl_01_bill_top"))
+
+    bill = BillPage(driver, platform)
+    assert bill.title_text() == "請求"
 ```
 
 ### 未実装のセットアップは自分で書く
@@ -161,6 +161,29 @@ setup_logged_in(driver, platform, **account("card_member"))
 **メールアドレスやパスワードをテストコードに直接書かない。**
 値は `testdata/accounts.yaml` の 1 か所にあり、変わったときに
 直す場所がそこだけで済むようにしている。
+
+### ディープリンクの呼び出し方
+
+**必ず次の形で書く。**
+
+```python
+BasePage(driver, platform).open_deeplink(deeplink("dl_01_bill_top"))
+```
+
+- **`BasePage` から呼ぶ。** 遷移先の Page Object から呼んではならない。
+  ディープリンクは特定の画面に属する操作ではなく、**どの画面にいるかに
+  関係なく端末に対して行う操作**であるため
+- 遷移先の Page Object は、開いたあとの確認に使う
+
+```python
+BasePage(driver, platform).open_deeplink(deeplink("dl_01_bill_top"))
+
+bill = BillPage(driver, platform)
+assert bill.title_text() == "請求"
+```
+
+- `deeplink()` の引数は試験項目の `value`(id)をそのまま渡す。
+  **URL をテストコードに直接書かない**
 
 ### ディープリンクと QR
 
