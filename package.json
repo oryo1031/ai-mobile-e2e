@@ -1,23 +1,10 @@
 {
   "name": "ai-mobile-e2e",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/oryo1031/ai-mobile-e2e.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "description": "Appium ドライバの導入先。E2E ハーネスが利用する。",
+  "private": true,
+  "license": "UNLICENSED",
   "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/oryo1031/ai-mobile-e2e/issues"
-  },
-  "homepage": "https://github.com/oryo1031/ai-mobile-e2e#readme",
   "devDependencies": {
     "appium": "^3.6.0",
     "appium-uiautomator2-driver": "^8.2.2",
